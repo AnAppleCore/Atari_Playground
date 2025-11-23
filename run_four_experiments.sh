@@ -21,30 +21,84 @@ cd "${SCRIPT_DIR}"
 LOG_DIR="logs"
 mkdir -p "${LOG_DIR}"
 
+# Detect number of available GPUs (if any)
+NUM_GPUS=0
+if command -v nvidia-smi >/dev/null 2>&1; then
+  NUM_GPUS=$(nvidia-smi --list-gpus | wc -l)
+fi
+
+if [ "${NUM_GPUS}" -ge 2 ]; then
+  echo "Detected ${NUM_GPUS} GPU(s). Jobs will be assigned round-robin across GPUs."
+elif [ "${NUM_GPUS}" -eq 1 ]; then
+  echo "Detected 1 GPU. All 4 jobs will share GPU 0."
+else
+  echo "No GPU detected (or nvidia-smi not available). All jobs will run on CPU."
+fi
+
 echo "Starting 4 experiments (2 algorithms x 2 games, 500k steps each)..."
 
-echo "[1/4] Pong-v5 with DQN on GPU 0"
-CUDA_VISIBLE_DEVICES=0 python scripts/train_single.py \
-  --game Pong-v5 --algorithm dqn --steps 500000 \
-  > "${LOG_DIR}/pong_dqn.log" 2>&1 &
+# Job 1: Pong DQN
+JOB_IDX=0
+if [ "${NUM_GPUS}" -ge 1 ]; then
+  GPU_ID=$((JOB_IDX % NUM_GPUS))
+  echo "[1/4] Pong-v5 with DQN on GPU ${GPU_ID}"
+  CUDA_VISIBLE_DEVICES=${GPU_ID} python scripts/train_single.py \
+    --game Pong-v5 --algorithm dqn --steps 500000 \
+    > "${LOG_DIR}/pong_dqn.log" 2>&1 &
+else
+  echo "[1/4] Pong-v5 with DQN on CPU (no GPU detected)"
+  python scripts/train_single.py \
+    --game Pong-v5 --algorithm dqn --steps 500000 \
+    > "${LOG_DIR}/pong_dqn.log" 2>&1 &
+fi
 PID1=$!
 
-echo "[2/4] Pong-v5 with PPO on GPU 1"
-CUDA_VISIBLE_DEVICES=1 python scripts/train_single.py \
-  --game Pong-v5 --algorithm ppo --steps 500000 \
-  > "${LOG_DIR}/pong_ppo.log" 2>&1 &
+# Job 2: Pong PPO
+JOB_IDX=1
+if [ "${NUM_GPUS}" -ge 1 ]; then
+  GPU_ID=$((JOB_IDX % NUM_GPUS))
+  echo "[2/4] Pong-v5 with PPO on GPU ${GPU_ID}"
+  CUDA_VISIBLE_DEVICES=${GPU_ID} python scripts/train_single.py \
+    --game Pong-v5 --algorithm ppo --steps 500000 \
+    > "${LOG_DIR}/pong_ppo.log" 2>&1 &
+else
+  echo "[2/4] Pong-v5 with PPO on CPU (no GPU detected)"
+  python scripts/train_single.py \
+    --game Pong-v5 --algorithm ppo --steps 500000 \
+    > "${LOG_DIR}/pong_ppo.log" 2>&1 &
+fi
 PID2=$!
 
-echo "[3/4] Breakout-v5 with DQN on GPU 2"
-CUDA_VISIBLE_DEVICES=2 python scripts/train_single.py \
-  --game Breakout-v5 --algorithm dqn --steps 500000 \
-  > "${LOG_DIR}/breakout_dqn.log" 2>&1 &
+# Job 3: Breakout DQN
+JOB_IDX=2
+if [ "${NUM_GPUS}" -ge 1 ]; then
+  GPU_ID=$((JOB_IDX % NUM_GPUS))
+  echo "[3/4] Breakout-v5 with DQN on GPU ${GPU_ID}"
+  CUDA_VISIBLE_DEVICES=${GPU_ID} python scripts/train_single.py \
+    --game Breakout-v5 --algorithm dqn --steps 500000 \
+    > "${LOG_DIR}/breakout_dqn.log" 2>&1 &
+else
+  echo "[3/4] Breakout-v5 with DQN on CPU (no GPU detected)"
+  python scripts/train_single.py \
+    --game Breakout-v5 --algorithm dqn --steps 500000 \
+    > "${LOG_DIR}/breakout_dqn.log" 2>&1 &
+fi
 PID3=$!
 
-echo "[4/4] Breakout-v5 with PPO on GPU 3"
-CUDA_VISIBLE_DEVICES=3 python scripts/train_single.py \
-  --game Breakout-v5 --algorithm ppo --steps 500000 \
-  > "${LOG_DIR}/breakout_ppo.log" 2>&1 &
+# Job 4: Breakout PPO
+JOB_IDX=3
+if [ "${NUM_GPUS}" -ge 1 ]; then
+  GPU_ID=$((JOB_IDX % NUM_GPUS))
+  echo "[4/4] Breakout-v5 with PPO on GPU ${GPU_ID}"
+  CUDA_VISIBLE_DEVICES=${GPU_ID} python scripts/train_single.py \
+    --game Breakout-v5 --algorithm ppo --steps 500000 \
+    > "${LOG_DIR}/breakout_ppo.log" 2>&1 &
+else
+  echo "[4/4] Breakout-v5 with PPO on CPU (no GPU detected)"
+  python scripts/train_single.py \
+    --game Breakout-v5 --algorithm ppo --steps 500000 \
+    > "${LOG_DIR}/breakout_ppo.log" 2>&1 &
+fi
 PID4=$!
 
 # Wait for all 4 experiments to finish

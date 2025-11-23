@@ -210,3 +210,4 @@ __marimo__/
 # Self-defined
 checkpoints
 outputs
+logs
