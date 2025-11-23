@@ -25,8 +25,11 @@ conda activate atari_rl
 ### 第2步：安装依赖库
 
 ```bash
-# 安装所有必需的库
+# 安装所有必需的库（从 PyPI 官方源）
 pip install -r requirements.txt
+
+# 如果你在国内，pip 下载很慢，可以临时使用清华镜像源：
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 这会安装：

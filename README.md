@@ -20,7 +20,11 @@ conda activate atari_rl
 
 ### Step 2: Install Dependencies
 ```bash
+# Default (direct from PyPI)
 pip install -r requirements.txt
+
+# If pip is very slow in China, you can temporarily use Tsinghua mirror:
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 This installs:
