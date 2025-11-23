@@ -1,0 +1,13 @@
+torch>=2.0.0
+gymnasium[atari]>=0.28.0
+ale-py>=0.8.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+opencv-python>=4.8.0
+pyyaml>=6.0
+tqdm>=4.66.0
+tensorboard>=2.14.0
+pillow>=10.0.0
+imageio>=2.25.0
+imageio-ffmpeg>=1.4.0
+

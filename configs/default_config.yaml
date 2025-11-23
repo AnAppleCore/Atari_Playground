@@ -1,0 +1,54 @@
+# Default Configuration for Atari RL Playground
+
+# Training Configuration
+training:
+  num_steps: 100000
+  batch_size: 32
+  learning_rate: 1e-4
+  gamma: 0.99
+  device: "cuda"  # or "cpu"
+
+# DQN Configuration
+dqn:
+  epsilon: 1.0
+  epsilon_decay: 0.995
+  epsilon_min: 0.01
+  target_update_freq: 1000
+  replay_buffer_size: 100000
+
+# PPO Configuration
+ppo:
+  gae_lambda: 0.95
+  clip_ratio: 0.2
+  entropy_coef: 0.01
+  value_loss_coef: 0.5
+
+# EWC Configuration
+ewc:
+  enabled: false
+  lambda: 0.4
+  fisher_update_freq: 1000
+
+# Environment Configuration
+environment:
+  frame_stack: 4
+  frame_size: 84
+  games:
+    - "Pong-v5"
+    - "Breakout-v5"
+    - "SpaceInvaders-v5"
+
+# Visualization Configuration
+visualization:
+  save_video: true
+  video_format: "mp4"  # or "gif"
+  video_fps: 15
+  record_frequency: 10  # Record every N steps
+
+# Logging Configuration
+logging:
+  log_frequency: 100
+  save_checkpoint_frequency: 10000
+  checkpoint_dir: "checkpoints"
+  output_dir: "outputs"
+
