@@ -75,11 +75,16 @@ def train_continual(
                 agent.set_task(task_id)
 
         replay_buffer = ReplayBuffer(capacity=100000)
+
+        # Per-task experiment directory for this continual run
+        exp_dir = Path("outputs") / "continual" / f"{algorithm}_ewc{use_ewc}" / game_name
+        exp_dir.mkdir(parents=True, exist_ok=True)
+
         video_recorder = VideoRecorder(
-            f"outputs/{game_name}_{algorithm}_ewc{use_ewc}.mp4",
+            str(exp_dir / "training.mp4"),
             fps=15  # Lower FPS for better viewing
         )
-        
+
         state = env.reset()
         episode_reward = 0
         episode_rewards = []
@@ -172,8 +177,13 @@ def train_continual(
     for name, values in continual_metrics.items():
         for v in values:
             metrics_plotter.add_metric(name, v)
-    metrics_output_path = f"outputs/continual_{algorithm}_ewc{use_ewc}_metrics.png"
-    metrics_plotter.plot(metrics_output_path)
+
+    # Experiment-level directory (not per-task) for aggregated continual results
+    exp_root = Path("outputs") / "continual" / f"{algorithm}_ewc{use_ewc}"
+    exp_root.mkdir(parents=True, exist_ok=True)
+
+    metrics_output_path = exp_root / "training_metrics.png"
+    metrics_plotter.plot(str(metrics_output_path))
     print(f"Continual metrics plot saved: {metrics_output_path}")
 
     # Plot catastrophic forgetting curves: each game's eval reward over stages
@@ -181,14 +191,16 @@ def train_continual(
     for game_name, history in eval_history.items():
         for stage_idx, avg_reward in history:
             eval_plotter.add_metric(f"{game_name}_stage{stage_idx}", avg_reward)
-    eval_metrics_path = f"outputs/continual_{algorithm}_ewc{use_ewc}_eval.png"
-    eval_plotter.plot(eval_metrics_path)
+    eval_metrics_path = exp_root / "forgetting_eval.png"
+    eval_plotter.plot(str(eval_metrics_path))
     print(f"Continual evaluation (forgetting) plot saved: {eval_metrics_path}")
 
-    # Save final agent
-    Path("checkpoints").mkdir(exist_ok=True)
-    agent.save(f"checkpoints/continual_{algorithm}_ewc{use_ewc}.pt")
-    print(f"\nAgent saved: checkpoints/continual_{algorithm}_ewc{use_ewc}.pt")
+    # Save final agent checkpoint in a structured location
+    ckpt_root = Path("checkpoints") / "continual"
+    ckpt_root.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = ckpt_root / f"{algorithm}_ewc{use_ewc}.pt"
+    agent.save(str(checkpoint_path))
+    print(f"\nAgent saved: {checkpoint_path}")
 
 
 if __name__ == "__main__":

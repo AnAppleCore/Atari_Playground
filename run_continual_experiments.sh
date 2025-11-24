@@ -47,6 +47,8 @@ echo "Steps per game: ${STEPS_PER_GAME}, EWC lambda: ${EWC_LAMBDA}"
 
 # Job 1: DQN without EWC
 JOB_IDX=0
+DQN_NO_EWC_TRAIN_DIR="outputs/experiments/continual/dqn_ewcFalse/train"
+mkdir -p "${DQN_NO_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[1/4] DQN WITHOUT EWC on GPU ${GPU_ID}"
@@ -65,6 +67,8 @@ PID1=$!
 
 # Job 2: DQN with EWC
 JOB_IDX=1
+DQN_EWC_TRAIN_DIR="outputs/experiments/continual/dqn_ewcTrue/train"
+mkdir -p "${DQN_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[2/4] DQN WITH EWC on GPU ${GPU_ID}"
@@ -87,6 +91,8 @@ PID2=$!
 
 # Job 3: PPO without EWC
 JOB_IDX=2
+PPO_NO_EWC_TRAIN_DIR="outputs/experiments/continual/ppo_ewcFalse/train"
+mkdir -p "${PPO_NO_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[3/4] PPO WITHOUT EWC on GPU ${GPU_ID}"
@@ -105,6 +111,8 @@ PID3=$!
 
 # Job 4: PPO with EWC
 JOB_IDX=3
+PPO_EWC_TRAIN_DIR="outputs/experiments/continual/ppo_ewcTrue/train"
+mkdir -p "${PPO_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[4/4] PPO WITH EWC on GPU ${GPU_ID}"

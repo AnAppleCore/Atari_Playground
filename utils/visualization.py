@@ -94,20 +94,45 @@ class MetricsPlotter:
             self.metrics[name] = []
         self.metrics[name].append(value)
     
-    def plot(self, output_path: str):
-        """Plot metrics."""
-        fig, axes = plt.subplots(1, len(self.metrics), figsize=(15, 4))
-        
-        if len(self.metrics) == 1:
-            axes = [axes]
-        
-        for idx, (name, values) in enumerate(self.metrics.items()):
-            axes[idx].plot(values)
-            axes[idx].set_title(name)
-            axes[idx].set_xlabel("Step")
-            axes[idx].set_ylabel("Value")
-            axes[idx].grid(True)
-        
+    def plot(self, output_path: str, max_cols: int = 2):
+        """Plot metrics in a compact grid layout.
+
+        Args:
+            output_path: Path to save the figure
+            max_cols: Maximum number of subplots per row (default: 2)
+        """
+        if not self.metrics:
+            print("No metrics to plot.")
+            return
+
+        num_metrics = len(self.metrics)
+        ncols = min(max_cols, num_metrics)
+        nrows = int(np.ceil(num_metrics / ncols))
+
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(5 * ncols, 3.5 * nrows),
+            squeeze=False,
+        )
+
+        # Plot each metric into its own subplot
+        for idx, (name, values) in enumerate(sorted(self.metrics.items())):
+            row = idx // ncols
+            col = idx % ncols
+            ax = axes[row][col]
+            ax.plot(values)
+            ax.set_title(name)
+            ax.set_xlabel("Step")
+            ax.set_ylabel("Value")
+            ax.grid(True)
+
+        # Hide any unused axes
+        for idx in range(num_metrics, nrows * ncols):
+            row = idx // ncols
+            col = idx % ncols
+            fig.delaxes(axes[row][col])
+
         plt.tight_layout()
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(output_path)

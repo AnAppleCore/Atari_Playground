@@ -58,10 +58,10 @@ python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 200000
 python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 100000
 ```
 
-**Output:**
-- MP4 video: `outputs/{game}_{algorithm}_training.mp4`
-- Metrics plot: `outputs/{game}_{algorithm}_metrics.png`
-- Model checkpoint: `checkpoints/{game}_{algorithm}.pt`
+**Output (per experiment folder):**
+- MP4 video: `outputs/single/{game}_{algorithm}/training.mp4`
+- Metrics plot: `outputs/single/{game}_{algorithm}/metrics.png`
+- Model checkpoint: `checkpoints/single/{game}_{algorithm}.pt`
 
 ### Continual Learning (Multiple Games)
 ```bash
@@ -72,11 +72,11 @@ python scripts/train_continual.py --algorithm dqn --steps-per-game 50000
 python scripts/train_continual.py --algorithm dqn --use-ewc --ewc-lambda 50.0 --steps-per-game 50000
 ```
 
-**Output:**
-- MP4 videos for each game: `outputs/{game}_{algorithm}_ewc{True/False}.mp4`
-- Training metrics: `outputs/continual_{algorithm}_ewc{True/False}_metrics.png`
-- Forgetting curves: `outputs/continual_{algorithm}_ewc{True/False}_eval.png`
-- Model checkpoint: `checkpoints/continual_{algorithm}_ewc{True/False}.pt`
+**Output (per experiment + per game folders):**
+- Per-game training videos: `outputs/continual/{algorithm}_ewc{True/False}/{game}/training.mp4`
+- Aggregated training metrics: `outputs/continual/{algorithm}_ewc{True/False}/training_metrics.png`
+- Forgetting curves: `outputs/continual/{algorithm}_ewc{True/False}/forgetting_eval.png`
+- Model checkpoint: `checkpoints/continual/{algorithm}_ewc{True/False}.pt`
 
 ### Available Games
 The framework supports 108 Atari games. Common ones:
@@ -98,6 +98,55 @@ The framework supports 108 Atari games. Common ones:
 --batch-size BATCH_SIZE   # Batch size for training (default: 32)
 --no-video                # Disable video recording for speed
 ```
+## Evaluation Guide
+
+### Single Game Evaluation
+```bash
+# Evaluate a trained single-task model (e.g., Pong DQN)
+python scripts/evaluate.py \
+  --mode single \
+  --model checkpoints/single/Pong-v5_dqn.pt \
+  --algorithm dqn \
+  --game Pong-v5 \
+  --episodes 10 \
+  --max-steps 10000 \
+  --json-out outputs/experiments/single/Pong-v5_dqn/eval/metrics.json
+```
+
+**Output (per experiment folder):**
+- JSON metrics: `outputs/experiments/single/{game}_{algorithm}/eval/metrics.json`
+- Evaluation curve: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_rewards.png`
+- Example gameplay video: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_gameplay.mp4`
+
+You can also run all four default single-game evaluations via:
+```bash
+bash run_evaluate_single.sh
+```
+
+### Continual Learning Evaluation
+```bash
+# Evaluate a trained continual model (e.g., DQN without EWC)
+python scripts/evaluate.py \
+  --mode continual \
+  --model checkpoints/continual/dqn_ewcFalse.pt \
+  --algorithm dqn \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --json-out outputs/experiments/continual/dqn_ewcFalse/eval/metrics.json
+```
+
+**Output (per continual experiment folder):**
+- JSON metrics: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/metrics.json`
+- Avg reward per game bar plot: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_avg_rewards.png`
+- One gameplay video per game: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_{game}_eval_gameplay.mp4`
+
+You can also run all four default continual evaluations via:
+```bash
+bash run_evaluate_continual.sh
+```
+
+
 
 ## Project Structure
 

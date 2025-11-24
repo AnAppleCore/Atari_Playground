@@ -39,6 +39,8 @@ echo "Starting 4 experiments (2 algorithms x 2 games, 500k steps each)..."
 
 # Job 1: Pong DQN
 JOB_IDX=0
+PONG_DQN_EXP_DIR="outputs/experiments/single/Pong-v5_dqn/train"
+mkdir -p "${PONG_DQN_EXP_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[1/4] Pong-v5 with DQN on GPU ${GPU_ID}"
@@ -55,6 +57,8 @@ PID1=$!
 
 # Job 2: Pong PPO
 JOB_IDX=1
+PONG_PPO_EXP_DIR="outputs/experiments/single/Pong-v5_ppo/train"
+mkdir -p "${PONG_PPO_EXP_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[2/4] Pong-v5 with PPO on GPU ${GPU_ID}"
@@ -71,6 +75,8 @@ PID2=$!
 
 # Job 3: Breakout DQN
 JOB_IDX=2
+BRK_DQN_EXP_DIR="outputs/experiments/single/Breakout-v5_dqn/train"
+mkdir -p "${BRK_DQN_EXP_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[3/4] Breakout-v5 with DQN on GPU ${GPU_ID}"
@@ -87,6 +93,8 @@ PID3=$!
 
 # Job 4: Breakout PPO
 JOB_IDX=3
+BRK_PPO_EXP_DIR="outputs/experiments/single/Breakout-v5_ppo/train"
+mkdir -p "${BRK_PPO_EXP_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
   echo "[4/4] Breakout-v5 with PPO on GPU ${GPU_ID}"

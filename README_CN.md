@@ -72,10 +72,10 @@ python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 200000
 python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 100000
 ```
 
-**输出文件：**
-- 📹 训练过程录像: `outputs/{game}_{algorithm}_training.mp4`
-- 📈 训练曲线: `outputs/{game}_{algorithm}_metrics.png`
-- 💾 训练模型: `checkpoints/{game}_{algorithm}.pt`
+**输出文件（每个实验一个独立文件夹）：**
+- 📹 训练过程录像: `outputs/single/{game}_{algorithm}/training.mp4`
+- 📈 训练曲线: `outputs/single/{game}_{algorithm}/metrics.png`
+- 💾 训练模型: `checkpoints/single/{game}_{algorithm}.pt`
 
 ### 方式2：连续学习（多个游戏）
 
@@ -89,11 +89,11 @@ python scripts/train_continual.py --algorithm dqn --steps-per-game 50000
 python scripts/train_continual.py --algorithm dqn --use-ewc --ewc-lambda 50.0 --steps-per-game 50000
 ```
 
-**输出文件：**
-- 📹 每个游戏的训练录像: `outputs/{game}_dqn_ewc{True/False}.mp4`
-- 📈 训练曲线: `outputs/continual_dqn_ewc{True/False}_metrics.png`
-- 📉 遗忘曲线: `outputs/continual_dqn_ewc{True/False}_eval.png`
-- 💾 训练模型: `checkpoints/continual_dqn_ewc{True/False}.pt`
+**输出文件（按实验 + 按游戏分文件夹）：**
+- 📹 每个游戏的训练录像: `outputs/continual/{algorithm}_ewc{True/False}/{game}/training.mp4`
+- 📈 整体训练曲线: `outputs/continual/{algorithm}_ewc{True/False}/training_metrics.png`
+- 📉 遗忘曲线: `outputs/continual/{algorithm}_ewc{True/False}/forgetting_eval.png`
+- 💾 训练模型: `checkpoints/continual/{algorithm}_ewc{True/False}.pt`
 
 ## 📊 理解结果
 
@@ -142,6 +142,63 @@ EWC（弹性权重巩固）就像给AI的大脑做"笔记"：
 --use-ewc                   # 启用 EWC
 --ewc-lambda LAMBDA         # EWC 强度（例如 10.0、50.0）
 ```
+## 📈 测试 / Evaluate 指南
+
+### 方式1：评估单个游戏模型
+
+你可以用 `scripts/evaluate.py` 对已经训练好的单任务模型做测试、画图、录制评估视频：
+
+```bash
+# 例如：评估 Pong DQN 模型
+python scripts/evaluate.py \
+  --mode single \
+  --model checkpoints/single/Pong-v5_dqn.pt \
+  --algorithm dqn \
+  --game Pong-v5 \
+  --episodes 10 \
+  --max-steps 10000 \
+  --json-out outputs/experiments/single/Pong-v5_dqn/eval/metrics.json
+```
+
+**输出文件（按实验单独建文件夹）：**
+- 📄 JSON 指标: `outputs/experiments/single/{game}_{algorithm}/eval/metrics.json`
+- 📈 评估曲线: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_rewards.png`
+- 🎬 示例游戏录像: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_gameplay.mp4`
+
+也可以一键评估 README 中默认的 4 个单任务实验：
+
+```bash
+bash run_evaluate_single.sh
+```
+
+### 方式2：评估连续学习模型
+
+对于连续学习（多个游戏）的模型，同样使用 `scripts/evaluate.py`：
+
+```bash
+# 例如：评估一个 DQN 不带 EWC 的连续学习模型
+python scripts/evaluate.py \
+  --mode continual \
+  --model checkpoints/continual/dqn_ewcFalse.pt \
+  --algorithm dqn \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --json-out outputs/experiments/continual/dqn_ewcFalse/eval/metrics.json
+```
+
+**输出文件（每个连续学习实验一个文件夹）：**
+- 📄 JSON 指标: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/metrics.json`
+- 📊 各个游戏平均奖励柱状图: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_avg_rewards.png`
+- 🎬 每个游戏各自一段评估录像: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_{game}_eval_gameplay.mp4`
+
+同样也可以一键评估 4 个默认的连续学习实验：
+
+```bash
+bash run_evaluate_continual.sh
+```
+
+
 
 **示例：**
 ```bash

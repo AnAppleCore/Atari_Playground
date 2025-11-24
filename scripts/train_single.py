@@ -49,11 +49,16 @@ def train_single_game(
     # Create replay buffer
     replay_buffer = ReplayBuffer(capacity=100000)
 
+    # Experiment output directory for this single-task run
+    exp_dir = Path("outputs") / "single" / f"{game_name}_{algorithm}"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+
     # Video recorder (MP4 format with 15 FPS for better playback)
     video_recorder = None
     if save_video:
+        video_path = exp_dir / "training.mp4"
         video_recorder = VideoRecorder(
-            f"outputs/{game_name}_{algorithm}_training.mp4",
+            str(video_path),
             fps=15,
         )
 
@@ -107,7 +112,7 @@ def train_single_game(
     # Save video
     if video_recorder is not None:
         video_recorder.save(format="mp4")
-        print(f"Video saved to outputs/{game_name}_{algorithm}.mp4")
+        print(f"Video saved to {exp_dir / 'training.mp4'}")
 
     # Simple reward statistics for inspection
     if episode_rewards:
@@ -119,14 +124,16 @@ def train_single_game(
         print(f"Average reward over last {last_n} episodes: {avg_last_n:.2f}")
 
     # Save metrics plot
-    metrics_output_path = f"outputs/{game_name}_{algorithm}_metrics.png"
-    metrics_plotter.plot(metrics_output_path)
+    metrics_output_path = exp_dir / "metrics.png"
+    metrics_plotter.plot(str(metrics_output_path))
     print(f"Metrics plot saved to {metrics_output_path}")
 
     # Save agent
     Path("checkpoints").mkdir(exist_ok=True)
-    agent.save(f"checkpoints/{game_name}_{algorithm}.pt")
-    print(f"Agent saved to checkpoints/{game_name}_{algorithm}.pt")
+    checkpoint_path = Path("checkpoints") / "single" / f"{game_name}_{algorithm}.pt"
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    agent.save(str(checkpoint_path))
+    print(f"Agent saved to {checkpoint_path}")
 
     env.close()
 
