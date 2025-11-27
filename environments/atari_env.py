@@ -3,8 +3,18 @@ import gymnasium as gym
 import numpy as np
 import torch
 from typing import Tuple
+import sys
+from pathlib import Path
 
-# Register Atari environments (only once)
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.atari_wrappers import (
+    ClipRewardEnv,
+    EpisodicLifeEnv,
+    FireResetEnv,
+    MaxAndSkipEnv,
+    NoopResetEnv,
+)
+
 _ATARI_ENVS_REGISTERED = False
 
 def _register_atari_envs():
@@ -15,111 +25,88 @@ def _register_atari_envs():
         return
 
     try:
-        # Check if Atari environments are already registered
         if "ALE/Pong-v5" not in gym.registry:
             from ale_py import register_v5_envs
-            # Suppress the override warnings from ale_py
             import warnings
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message=".*Overriding environment.*")
                 register_v5_envs()
         _ATARI_ENVS_REGISTERED = True
     except ImportError:
-        # ale_py not installed, will fail when trying to create environment
         pass
     except Exception as e:
-        # Other errors during registration
         import warnings
         warnings.warn(f"Failed to register Atari environments: {e}")
 
 
 class AtariEnv:
-    """Wrapper for Atari environments."""
+    """Wrapper for Atari environments with cleanrl-style preprocessing."""
 
-    def __init__(self, game_name: str, frame_stack: int = 4, render_mode: str = None):
+    def __init__(self, game_name: str, frame_stack: int = 4, render_mode: str = None, seed: int = None, use_skip: bool = True):
         """
-        Initialize Atari environment.
+        Initialize Atari environment with cleanrl-style wrappers.
 
         Args:
             game_name: Name of the Atari game (e.g., 'Pong-v5' or 'ALE/Pong-v5')
-            frame_stack: Number of frames to stack
+            frame_stack: Number of frames to stack (should be 4)
             render_mode: Render mode ('rgb_array' for visualization, None for training)
+            seed: Random seed for environment
+            use_skip: Whether to use frame skipping (default: True for training, False for testing)
         """
-        # Register Atari environments (only once)
         _register_atari_envs()
 
         self.game_name = game_name
         self.frame_stack = frame_stack
 
-        # Convert game name format if needed
         if not game_name.startswith("ALE/"):
             game_name = f"ALE/{game_name}"
 
-        # Create environment with render mode for visualization
-        self.env = gym.make(game_name, render_mode=render_mode)
-        self.action_space = self.env.action_space.n
+        if render_mode:
+            self.env = gym.make(game_name, render_mode=render_mode)
+        else:
+            self.env = gym.make(game_name)
         
-        # Frame stacking
-        self.frames = None
-        self.reset()
+        self.env = gym.wrappers.RecordEpisodeStatistics(self.env)
+        self.env = NoopResetEnv(self.env, noop_max=30)
+        if use_skip:
+            self.env = MaxAndSkipEnv(self.env, skip=4)
+        self.env = EpisodicLifeEnv(self.env)
+        if "FIRE" in self.env.unwrapped.get_action_meanings():
+            self.env = FireResetEnv(self.env)
+        self.env = ClipRewardEnv(self.env)
+        self.env = gym.wrappers.ResizeObservation(self.env, (84, 84))
+        self.env = gym.wrappers.GrayscaleObservation(self.env)
+        self.env = gym.wrappers.FrameStackObservation(self.env, frame_stack)
+        
+        if seed is not None:
+            self.env.action_space.seed(seed)
+        
+        self.action_space = self.env.action_space.n
     
     def reset(self) -> torch.Tensor:
         """Reset environment and return initial state."""
         obs, _ = self.env.reset()
-        obs = self._preprocess(obs)
-        
-        # Initialize frame stack
-        self.frames = np.zeros((self.frame_stack, 84, 84), dtype=np.uint8)
-        for i in range(self.frame_stack):
-            self.frames[i] = obs
-        
-        return self._get_state()
+        obs = torch.from_numpy(obs).float()
+        return obs
     
     def step(self, action: int) -> Tuple[torch.Tensor, float, bool]:
         """Take a step in the environment.
 
         Args:
-            action: Discrete action index. If it falls outside the valid
-                range ``[0, self.env.action_space.n - 1]``, it will be
-                clipped. This allows sharing a single agent with a larger
-                action space across multiple games that may have fewer
-                primitive actions.
+            action: Discrete action index (clipped to valid range if needed)
 
         Returns:
             state: Current state
             reward: Reward
-            done: Whether episode is done (terminated or truncated)
+            done: Whether episode is done
         """
-        # Clip action to the valid range of the underlying environment
         valid_action = int(np.clip(action, 0, self.env.action_space.n - 1))
-
         obs, reward, terminated, truncated, _ = self.env.step(valid_action)
-        obs = self._preprocess(obs)
-
-        # Update frame stack
-        self.frames = np.roll(self.frames, shift=1, axis=0)
-        self.frames[0] = obs
+        obs = torch.from_numpy(obs).float()
 
         done = terminated or truncated
 
-        return self._get_state(), float(reward), done
-
-    def _preprocess(self, obs: np.ndarray) -> np.ndarray:
-        """Preprocess observation."""
-        # Convert to grayscale
-        obs = np.dot(obs[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-        # Resize to 84x84
-        obs = self._resize(obs, (84, 84))
-        return obs
-    
-    def _resize(self, img: np.ndarray, size: Tuple[int, int]) -> np.ndarray:
-        """Resize image."""
-        from PIL import Image
-        return np.array(Image.fromarray(img).resize(size, Image.BILINEAR))
-    
-    def _get_state(self) -> torch.Tensor:
-        """Get current state as tensor."""
-        return torch.from_numpy(self.frames.astype(np.float32) / 255.0)
+        return obs, float(reward), done
     
     def close(self):
         """Close environment."""

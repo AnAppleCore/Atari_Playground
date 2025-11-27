@@ -1,33 +1,45 @@
 # Default Configuration for Atari RL Playground
+# All hyperparameters are optimized based on cleanrl's proven settings for Atari games
 
 # Training Configuration
 training:
-  num_steps: 100000
+  num_steps: 500000
   batch_size: 32
-  learning_rate: 1e-4
-  gamma: 0.99
   device: "cuda"  # or "cpu"
 
-# DQN Configuration
+# DQN Configuration (optimized for Atari games)
+# Based on cleanrl/dqn_atari.py
 dqn:
-  epsilon: 1.0
-  epsilon_decay: 0.995
-  epsilon_min: 0.01
-  target_update_freq: 1000
+  learning_rate: 1e-4
+  gamma: 0.99
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_fraction: 0.10  # 10% of total steps for exploration decay
+  learning_starts: 80000  # Start learning after collecting enough experiences
+  target_update_freq: 1000  # Update target network every N steps
+  train_frequency: 4  # Train every N steps
   replay_buffer_size: 100000
+  tau: 1.0  # Hard update (copy weights) instead of soft update
 
-# PPO Configuration
+# PPO Configuration (optimized for Atari games)
+# Based on cleanrl/ppo_atari.py
 ppo:
-  gae_lambda: 0.95
-  clip_ratio: 0.2
-  entropy_coef: 0.01
-  value_loss_coef: 0.5
+  learning_rate: 2.5e-4
+  gamma: 0.99
+  gae_lambda: 0.95  # Generalized Advantage Estimation lambda
+  clip_coef: 0.1  # PPO clipping coefficient
+  ent_coef: 0.01  # Entropy coefficient for exploration
+  vf_coef: 0.5  # Value function loss coefficient
+  max_grad_norm: 0.5  # Gradient clipping threshold
+  rollout_length: 128  # Number of steps to collect before updating
+  update_epochs: 4  # Number of update epochs per rollout
+  minibatch_size: 32  # Minibatch size (rollout_length / num_minibatches)
 
-# EWC Configuration
+# EWC Configuration (for continual learning)
 ewc:
   enabled: false
-  lambda: 0.4
-  fisher_update_freq: 1000
+  lambda: 0.4  # EWC regularization strength
+  fisher_update_freq: 1000  # Update Fisher Information Matrix every N steps
 
 # Environment Configuration
 environment:
@@ -40,10 +52,10 @@ environment:
 
 # Visualization Configuration
 visualization:
-  save_video: true
+  save_video: false  # Disabled by default to save memory during long training runs
   video_format: "mp4"  # or "gif"
-  video_fps: 15
-  record_frequency: 10  # Record every N steps
+  video_fps: 30  # Frames per second for video recording
+  record_frequency: 2  # Record every N steps (step % 2 == 0 in actual code)
 
 # Logging Configuration
 logging:
@@ -51,4 +63,3 @@ logging:
   save_checkpoint_frequency: 10000
   checkpoint_dir: "checkpoints"
   output_dir: "outputs"
-

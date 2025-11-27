@@ -4,8 +4,8 @@
 # This script assumes you have already activated the `atari_rl` conda
 # environment and are running from the Atari_Playground directory.
 #
-# The evaluation results (JSON and plots) will be saved under
-#   outputs/evaluate/
+# The evaluation results (JSON, plots, and videos) will be saved under
+#   outputs/single/{game}_{algorithm}/eval/
 
 set -e
 
@@ -15,13 +15,9 @@ cd "${SCRIPT_DIR}"
 EPISODES=10
 MAX_STEPS=10000
 
-# Experiment-specific output directories for evaluations
-PONG_DQN_DIR="outputs/experiments/single/Pong-v5_dqn/eval"
-PONG_PPO_DIR="outputs/experiments/single/Pong-v5_ppo/eval"
-BRK_DQN_DIR="outputs/experiments/single/Breakout-v5_dqn/eval"
-BRK_PPO_DIR="outputs/experiments/single/Breakout-v5_ppo/eval"
-
-mkdir -p "${PONG_DQN_DIR}" "${PONG_PPO_DIR}" "${BRK_DQN_DIR}" "${BRK_PPO_DIR}"
+# Evaluation results will be saved in the same directories as training outputs
+# outputs/single/{game}_{algorithm}/eval/
+# The evaluate.py script will automatically infer the directory from model path
 
 # Pong-v5 DQN
 python scripts/evaluate.py \
@@ -31,7 +27,7 @@ python scripts/evaluate.py \
   --game Pong-v5 \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
-  --json-out "${PONG_DQN_DIR}/metrics.json"
+  --json-out outputs/single/Pong-v5_dqn/eval/metrics.json
 
 # Pong-v5 PPO
 python scripts/evaluate.py \
@@ -41,7 +37,7 @@ python scripts/evaluate.py \
   --game Pong-v5 \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
-  --json-out "${PONG_PPO_DIR}/metrics.json"
+  --json-out outputs/single/Pong-v5_ppo/eval/metrics.json
 
 # Breakout-v5 DQN
 python scripts/evaluate.py \
@@ -51,7 +47,7 @@ python scripts/evaluate.py \
   --game Breakout-v5 \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
-  --json-out "${BRK_DQN_DIR}/metrics.json"
+  --json-out outputs/single/Breakout-v5_dqn/eval/metrics.json
 
 # Breakout-v5 PPO
 python scripts/evaluate.py \
@@ -61,5 +57,5 @@ python scripts/evaluate.py \
   --game Breakout-v5 \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
-  --json-out "${BRK_PPO_DIR}/metrics.json"
+  --json-out outputs/single/Breakout-v5_ppo/eval/metrics.json
 

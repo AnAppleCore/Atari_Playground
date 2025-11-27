@@ -65,15 +65,21 @@ python scripts/demo.py
 ### 方式1：训练单个游戏
 
 ```bash
-# 让DQN学习Pong游戏（200,000步，更适合课堂演示）
-python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 200000
+# 让DQN学习Pong游戏（500,000步，推荐以获得良好性能）
+python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 500000
 
 # 或者让PPO学习Breakout游戏
-python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 100000
+python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 500000
+
+# 快速测试（较少步数，用于快速迭代）
+python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 100000
+
+# 启用视频录制（默认关闭以节省内存）
+python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 100000 --save-video
 ```
 
 **输出文件（每个实验一个独立文件夹）：**
-- 📹 训练过程录像: `outputs/single/{game}_{algorithm}/training.mp4`
+- 📹 训练过程录像: `outputs/single/{game}_{algorithm}/training.mp4` (仅在使用 `--save-video` 时生成)
 - 📈 训练曲线: `outputs/single/{game}_{algorithm}/metrics.png`
 - 💾 训练模型: `checkpoints/single/{game}_{algorithm}.pt`
 
@@ -82,15 +88,23 @@ python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 100000
 让AI依次学习3个游戏：Pong → Breakout → SpaceInvaders
 
 ```bash
-# 不使用EWC - AI会忘记之前学过的游戏（灾难性遗忘）
+# 使用DQN，不使用EWC - AI会忘记之前学过的游戏（灾难性遗忘）
 python scripts/train_continual.py --algorithm dqn --steps-per-game 50000
 
-# 使用EWC - AI会更好地记住之前学过的游戏（但仍然很难完美平衡新旧任务）
-python scripts/train_continual.py --algorithm dqn --use-ewc --ewc-lambda 50.0 --steps-per-game 50000
+# 使用DQN，启用EWC - AI会更好地记住之前学过的游戏
+python scripts/train_continual.py --algorithm dqn --use-ewc --ewc-lambda 0.4 --steps-per-game 50000
+
+# 使用PPO，不使用EWC
+python scripts/train_continual.py --algorithm ppo --steps-per-game 50000
+
+# 使用PPO，启用EWC
+python scripts/train_continual.py --algorithm ppo --use-ewc --ewc-lambda 0.4 --steps-per-game 50000
 ```
 
+**注意：** DQN 和 PPO 都支持不同 action space 的连续学习。框架会自动使用多头架构（MultiHeadDQNAgent 和 MultiHeadPPOAgent）来处理不同动作维度的游戏。
+
 **输出文件（按实验 + 按游戏分文件夹）：**
-- 📹 每个游戏的训练录像: `outputs/continual/{algorithm}_ewc{True/False}/{game}/training.mp4`
+- 📹 每个游戏的训练录像: `outputs/continual/{algorithm}_ewc{True/False}/{game}/training.mp4` (仅在使用 `--save-video` 时生成)
 - 📈 整体训练曲线: `outputs/continual/{algorithm}_ewc{True/False}/training_metrics.png`
 - 📉 遗忘曲线: `outputs/continual/{algorithm}_ewc{True/False}/forgetting_eval.png`
 - 💾 训练模型: `checkpoints/continual/{algorithm}_ewc{True/False}.pt`
@@ -123,7 +137,7 @@ EWC（弹性权重巩固）就像给AI的大脑做"笔记"：
 
 ## 📋 训练参数详解
 
-所有训练脚本都支持以下参数：
+### 单游戏训练脚本 (`scripts/train_single.py`)
 
 ```bash
 # 游戏选择
@@ -133,14 +147,53 @@ EWC（弹性权重巩固）就像给AI的大脑做"笔记"：
 --algorithm {dqn,ppo}       # 算法 (默认: dqn)
 
 # 训练参数
---steps STEPS               # 单游戏总训练步数 (默认: 200000)
---steps-per-game STEPS      # 连续学习中每个游戏的步数 (默认: 50000)
+--steps STEPS               # 单游戏总训练步数 (默认: 500000)
 --batch-size BATCH_SIZE     # 批大小 (默认: 32)
---no-video                  # 关闭视频录制，加快训练
+--save-video                # 启用视频录制（默认关闭以节省内存）
+```
+
+### 连续学习训练脚本 (`scripts/train_continual.py`)
+
+```bash
+# 游戏列表
+--games GAME1 GAME2 ...     # 游戏名称列表 (默认: Pong-v5 Breakout-v5 SpaceInvaders-v5)
+
+# 算法选择
+--algorithm {dqn,ppo}       # 算法 (默认: dqn)
+
+# 训练参数
+--steps-per-game STEPS      # 连续学习中每个游戏的步数 (默认: 50000)
+--batch-size BATCH_SIZE     # 批大小 (默认: 32，用于 DQN 更新)
+--save-video                # 启用视频录制（默认关闭以节省内存）
 
 # EWC 参数（仅连续学习）
 --use-ewc                   # 启用 EWC
---ewc-lambda LAMBDA         # EWC 强度（例如 10.0、50.0）
+--ewc-lambda LAMBDA         # EWC 强度 (默认: 0.4)
+```
+
+**默认超参数（针对Atari游戏优化）：**
+
+*DQN:*
+- 学习率: `1e-4`
+- 批大小: `32`
+- Gamma (折扣因子): `0.99`
+- Epsilon: `1.0` → `0.01` (线性衰减，占总步数的10%)
+- 开始学习: `80000` 步后
+- 目标网络更新频率: 每 `1000` 步
+- 训练频率: 每 `4` 步
+- 经验回放缓冲区大小: `100,000`
+
+*PPO:*
+- 学习率: `2.5e-4`
+- 批大小: `32` (小批量)
+- Gamma (折扣因子): `0.99`
+- GAE lambda: `0.95`
+- 裁剪系数: `0.1`
+- 熵系数: `0.01`
+- 价值函数系数: `0.5`
+- 最大梯度范数: `0.5`
+- Rollout长度: `128` 步
+- 更新轮数: `4`
 ```
 ## 📈 测试 / Evaluate 指南
 
@@ -157,13 +210,13 @@ python scripts/evaluate.py \
   --game Pong-v5 \
   --episodes 10 \
   --max-steps 10000 \
-  --json-out outputs/experiments/single/Pong-v5_dqn/eval/metrics.json
+  --json-out outputs/single/Pong-v5_dqn/eval/metrics.json
 ```
 
 **输出文件（按实验单独建文件夹）：**
-- 📄 JSON 指标: `outputs/experiments/single/{game}_{algorithm}/eval/metrics.json`
-- 📈 评估曲线: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_rewards.png`
-- 🎬 示例游戏录像: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_gameplay.mp4`
+- 📄 JSON 指标: `outputs/single/{game}_{algorithm}/eval/metrics.json`
+- 📈 评估曲线: `outputs/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_rewards.png`
+- 🎬 示例游戏录像: `outputs/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_gameplay.mp4`
 
 也可以一键评估 README 中默认的 4 个单任务实验：
 
@@ -184,13 +237,25 @@ python scripts/evaluate.py \
   --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
   --episodes 5 \
   --max-steps 10000 \
-  --json-out outputs/experiments/continual/dqn_ewcFalse/eval/metrics.json
+  --json-out outputs/continual/dqn_ewcFalse/eval/metrics.json
+
+# 评估一个 PPO 带 EWC 的连续学习模型
+python scripts/evaluate.py \
+  --mode continual \
+  --model checkpoints/continual/ppo_ewcTrue.pt \
+  --algorithm ppo \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --ewc \
+  --ewc-lambda 0.4 \
+  --json-out outputs/continual/ppo_ewcTrue/eval/metrics.json
 ```
 
 **输出文件（每个连续学习实验一个文件夹）：**
-- 📄 JSON 指标: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/metrics.json`
-- 📊 各个游戏平均奖励柱状图: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_avg_rewards.png`
-- 🎬 每个游戏各自一段评估录像: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_{game}_eval_gameplay.mp4`
+- 📄 JSON 指标: `outputs/continual/{algorithm}_ewc{True/False}/eval/metrics.json`
+- 📊 各个游戏平均奖励柱状图: `outputs/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_avg_rewards.png`
+- 🎬 每个游戏各自一段评估录像: `outputs/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_{game}_eval_gameplay.mp4`
 
 同样也可以一键评估 4 个默认的连续学习实验：
 
@@ -202,7 +267,10 @@ bash run_evaluate_continual.sh
 
 **示例：**
 ```bash
-# 用 PPO 训练 Breakout，50,000 步
+# 用 PPO 训练 Breakout，500,000 步（推荐）
+python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 500000
+
+# 快速测试，50,000 步
 python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 50000
 
 # 连续学习，每个游戏 10,000 步，启用 EWC
@@ -218,14 +286,16 @@ python scripts/train_single.py --game Pong-v5 --batch-size 64
 Atari_Playground/
 ├── algorithms/              # AI算法的代码
 │   ├── base.py             # 基础Agent类和神经网络
-│   ├── dqn.py              # DQN算法
-│   ├── ppo.py              # PPO算法
-│   └── ewc.py              # EWC算法
+│   ├── dqn.py              # DQN算法（包含MultiHeadDQNAgent用于连续学习）
+│   ├── ppo.py              # PPO算法（包含MultiHeadPPOAgent用于连续学习）
+│   └── ewc.py              # EWC算法（支持多任务连续学习）
 ├── environments/            # 游戏环境
 │   └── atari_env.py        # Atari游戏包装
 ├── utils/                  # 工具函数
-│   ├── replay_buffer.py    # 经验存储和回放
-│   └── visualization.py    # 可视化工具
+│   ├── replay_buffer.py    # 经验存储和回放（DQN 等离线算法）
+│   ├── rollout_buffer.py   # Rollout 缓冲区（PPO 等 on-policy 算法）
+│   ├── atari_wrappers.py   # Atari 预处理包装（NoopResetEnv 等）
+│   └── visualization.py    # 视频录制与指标可视化
 ├── scripts/                # 训练脚本
 │   ├── train_single.py     # 训练单个游戏
 │   ├── train_continual.py  # 训练多个游戏
@@ -242,24 +312,6 @@ Atari_Playground/
 └── LICENSE
 ```
 
-## 🎓 学习路径
-
-### 初级（理解概念）
-1. 运行 `python scripts/full_demo.py` 看演示
-2. 阅读代码注释理解算法
-3. 修改参数看效果变化
-
-### 中级（自己训练）
-1. 训练单个游戏：`train_single.py`
-2. 对比DQN和PPO的效果
-3. 调整学习率、步数等参数
-
-### 高级（研究灾难性遗忘）
-1. 运行不使用EWC的连续学习
-2. 运行使用EWC的连续学习
-3. 对比两者的性能差异
-4. 尝试修改EWC的参数
-
 ## 💡 初学者常见问题
 
 ### Q1: 什么是 DQN？
@@ -275,6 +327,10 @@ Atari_Playground/
 - **PPO**: 学习"策略"（应该做什么动作）
 
 PPO 通常学得更快，更稳定。
+
+在连续学习中，两者都支持不同 action space 的游戏：
+- **DQN**: 使用 MultiHeadDQNAgent，共享特征提取器，每个游戏有独立的 Q 值输出头
+- **PPO**: 使用 MultiHeadPPOAgent，共享特征提取器，每个游戏有独立的策略和价值输出头
 
 ### Q3: 为什么需要 EWC？
 **A:** 当 AI 学习新游戏时，它会改变神经网络的权重，导致之前学过的游戏性能下降。EWC 通过"保护"重要的权重来解决这个问题。
@@ -294,7 +350,7 @@ PPO 通常学得更快，更稳定。
 
 ### Q7: 训练过程中会生成什么文件？
 **A:**
-- **MP4 视频文件**: `outputs/` 目录，游戏录像（15 FPS，便于观看）
+- **MP4 视频文件**: `outputs/` 目录，游戏录像（30 FPS，仅在使用 `--save-video` 时生成，默认关闭以节省内存）
 - **模型文件**: `checkpoints/` 目录，训练好的模型
 - **日志**: 控制台输出，包括损失值和进度
 
@@ -307,8 +363,8 @@ PPO 通常学得更快，更稳定。
 4. 理解项目结构
 
 ### 中级（2-4小时）
-1. 训练单个游戏：`python scripts/train_single.py --game Pong-v5 --steps 10000`
-2. 查看生成的 MP4 视频文件
+1. 训练单个游戏：`python scripts/train_single.py --game Pong-v5 --steps 100000`
+2. 查看生成的指标图表（如需视频，使用 `--save-video` 参数）
 3. 尝试不同的游戏和算法
 4. 阅读 `algorithms/` 中的代码
 
@@ -326,6 +382,7 @@ PPO 通常学得更快，更稳定。
 - **关键技术**: 经验回放、目标网络、ε-贪心探索
 - **优点**: 稳定、可靠
 - **缺点**: 收敛较慢
+- **连续学习**: 使用 MultiHeadDQNAgent，共享 backbone 和每个任务独立的输出头
 
 ### PPO (Proximal Policy Optimization)
 - **目标**: 学习最优的策略 π(a|s)
@@ -333,12 +390,14 @@ PPO 通常学得更快，更稳定。
 - **关键技术**: 优势估计、策略裁剪、熵正则化
 - **优点**: 学习快、稳定
 - **缺点**: 需要更多样本
+- **连续学习**: 使用 MultiHeadPPOAgent，共享 backbone 和每个任务独立的 actor/critic 头
 
 ### EWC (Elastic Weight Consolidation)
 - **目标**: 在学习新任务时保留旧任务的知识
-- **方法**: 使用 Fisher 信息矩阵保护重要权重
+- **方法**: 使用 Fisher 信息矩阵（通过梯度平方计算）保护重要权重
 - **效果**: 减轻灾难性遗忘
 - **应用**: 连续学习、终身学习
+- **特性**: 支持多任务 EWC，为每个之前的任务保存权重和 Fisher 信息
 
 ## 🔧 故障排除
 

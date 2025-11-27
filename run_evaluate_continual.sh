@@ -5,7 +5,7 @@
 # environment and are running from the Atari_Playground directory.
 #
 # The evaluation results (JSON) will be saved under
-#   outputs/evaluate/
+#   outputs/continual/{algorithm}_ewc{True/False}/eval/
 
 set -e
 
@@ -18,13 +18,9 @@ MAX_STEPS=10000
 # List of games used in train_continual.py (adjust if you changed it)
 GAMES=(Pong-v5 Breakout-v5 SpaceInvaders-v5)
 
-# Experiment-specific eval directories for continual runs
-DQN_NO_EWC_DIR="outputs/experiments/continual/dqn_ewcFalse/eval"
-DQN_EWC_DIR="outputs/experiments/continual/dqn_ewcTrue/eval"
-PPO_NO_EWC_DIR="outputs/experiments/continual/ppo_ewcFalse/eval"
-PPO_EWC_DIR="outputs/experiments/continual/ppo_ewcTrue/eval"
-
-mkdir -p "${DQN_NO_EWC_DIR}" "${DQN_EWC_DIR}" "${PPO_NO_EWC_DIR}" "${PPO_EWC_DIR}"
+# Evaluation results will be saved in the same directories as training outputs
+# outputs/continual/{algorithm}_ewc{True/False}/eval/
+# The evaluate.py script will automatically infer the directory from model path
 
 # DQN without EWC
 python scripts/evaluate.py \
@@ -34,7 +30,7 @@ python scripts/evaluate.py \
   --games "${GAMES[@]}" \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
-  --json-out "${DQN_NO_EWC_DIR}/metrics.json"
+  --json-out outputs/continual/dqn_ewcFalse/eval/metrics.json
 
 # DQN with EWC
 python scripts/evaluate.py \
@@ -45,8 +41,8 @@ python scripts/evaluate.py \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
   --ewc \
-  --ewc-lambda 50.0 \
-  --json-out "${DQN_EWC_DIR}/metrics.json"
+  --ewc-lambda 0.4 \
+  --json-out outputs/continual/dqn_ewcTrue/eval/metrics.json
 
 # PPO without EWC
 python scripts/evaluate.py \
@@ -56,7 +52,7 @@ python scripts/evaluate.py \
   --games "${GAMES[@]}" \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
-  --json-out "${PPO_NO_EWC_DIR}/metrics.json"
+  --json-out outputs/continual/ppo_ewcFalse/eval/metrics.json
 
 # PPO with EWC
 python scripts/evaluate.py \
@@ -67,6 +63,6 @@ python scripts/evaluate.py \
   --episodes "${EPISODES}" \
   --max-steps "${MAX_STEPS}" \
   --ewc \
-  --ewc-lambda 50.0 \
-  --json-out "${PPO_EWC_DIR}/metrics.json"
+  --ewc-lambda 0.4 \
+  --json-out outputs/continual/ppo_ewcTrue/eval/metrics.json
 

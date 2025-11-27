@@ -11,41 +11,44 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from environments import AtariEnv
-from algorithms import DQNAgent, PPOAgent, EWCWrapper, MultiHeadDQNAgent
+from algorithms import DQNAgent, PPOAgent, EWCWrapper, MultiHeadDQNAgent, MultiHeadPPOAgent
 from utils import VideoRecorder
 
-# Base directory for evaluation figures and videos.
-# For better organization, we create one folder per experiment; by
-# default this is derived from either --json-out (if provided) or
-# falls back to a generic "outputs/evaluate" directory.
-EVAL_DIR = Path("outputs/evaluate")
+EVAL_DIR = None
 
 
-def _set_eval_dir_from_json_out(json_out: Optional[str]) -> None:
-    """Configure EVAL_DIR based on the JSON output path (if any).
+def _infer_eval_dir_from_model_path(model_path: str, mode: str) -> Path:
+    """Infer evaluation directory from model path to match training structure."""
+    model_path = Path(model_path)
+    if mode == "single":
+        checkpoint_name = model_path.stem
+        eval_dir = Path("outputs") / "single" / checkpoint_name / "eval"
+    else:
+        checkpoint_name = model_path.stem
+        eval_dir = Path("outputs") / "continual" / checkpoint_name / "eval"
+    return eval_dir
 
-    If the user passes --json-out PATH, we treat PATH's parent directory
-    as the experiment-specific evaluation directory, so that plots and
-    videos for that run live alongside its JSON. If not given, we keep
-    using the default EVAL_DIR.
-    """
+
+def _set_eval_dir_from_json_out(json_out: Optional[str], model_path: str, mode: str) -> None:
+    """Configure EVAL_DIR from json_out or infer from model path."""
     global EVAL_DIR
     if json_out:
         EVAL_DIR = Path(json_out).parent
+    else:
+        EVAL_DIR = _infer_eval_dir_from_model_path(model_path, mode)
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _get_eval_dir() -> Path:
     """Ensure and return the evaluation output directory."""
+    if EVAL_DIR is None:
+        raise RuntimeError("EVAL_DIR not set. Call _set_eval_dir_from_json_out first.")
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
     return EVAL_DIR
 
 
 def _plot_single_results(result: dict) -> Path:
-    """Plot episode rewards for a single-task evaluation.
-
-    Saves a line plot ``episode -> reward`` and returns its path.
-    """
+    """Plot episode rewards for a single-task evaluation."""
     out_dir = _get_eval_dir()
     game = result["game"]
     algorithm = result["algorithm"]
@@ -89,30 +92,70 @@ def _plot_continual_results(result: dict) -> Path:
 
 
 def _record_example_video(agent, game: str, algorithm: str, output_path: Path, max_steps: int = 10000):
-    """Record a single-episode gameplay video for the given agent and game.
+    """Record a single-episode gameplay video."""
+    env = AtariEnv(game, render_mode="rgb_array", use_skip=False)
+    video_recorder = VideoRecorder(str(output_path), fps=30)
 
-    The agent is assumed to be already loaded and in eval mode.
-    """
-    env = AtariEnv(game, render_mode="rgb_array")
-    video_recorder = VideoRecorder(str(output_path), fps=15)
-
-    # For continual DQN agents, make sure the correct head is active
     if hasattr(agent, "set_task"):
         try:
             agent.set_task(game)
         except Exception:
             pass
 
+    # Find EpisodicLifeEnv wrapper to check was_real_done
+    episodic_life_wrapper = None
+    wrapper = env.env
+    while wrapper is not None:
+        if hasattr(wrapper, 'was_real_done'):
+            episodic_life_wrapper = wrapper
+            break
+        if hasattr(wrapper, 'env'):
+            wrapper = wrapper.env
+        else:
+            break
+
     with torch.no_grad():
         state = env.reset()
-        for _ in range(max_steps):
-            frame = env.env.render()
+        for step in range(max_steps):
+            frame = None
+            try:
+                if hasattr(env.env, 'render'):
+                    frame = env.env.render()
+                if frame is None and hasattr(env.env, 'unwrapped'):
+                    unwrapped = env.env.unwrapped
+                    if hasattr(unwrapped, 'render'):
+                        frame = unwrapped.render()
+                if frame is None:
+                    if isinstance(state, torch.Tensor):
+                        frame = state[0].cpu().numpy()
+                    else:
+                        frame = state[0] if len(state.shape) > 2 else state
+            except Exception:
+                if isinstance(state, torch.Tensor):
+                    frame = state[0].cpu().numpy()
+                else:
+                    frame = state[0] if len(state.shape) > 2 else state
+            
             if frame is not None:
                 video_recorder.add_frame(frame)
 
             action = agent.select_action(state)
             state, _, done = env.step(action)
-            if done:
+            
+            # Check if this is a real game over (not just loss of life)
+            # If EpisodicLifeEnv wrapper exists, check was_real_done
+            # Otherwise, check if lives are exhausted
+            real_done = done
+            if episodic_life_wrapper is not None:
+                real_done = episodic_life_wrapper.was_real_done
+            elif hasattr(env.env, 'unwrapped') and hasattr(env.env.unwrapped, 'ale'):
+                try:
+                    lives = env.env.unwrapped.ale.lives()
+                    real_done = done and lives == 0
+                except:
+                    real_done = done
+            
+            if real_done:
                 break
 
     video_recorder.save(format="mp4")
@@ -120,12 +163,7 @@ def _record_example_video(agent, game: str, algorithm: str, output_path: Path, m
 
 
 def evaluate_single(model_path: str, game: str, algorithm: str, episodes: int, max_steps: int):
-    """Evaluate a single-task agent checkpoint on one game.
-
-    In addition to printing statistics (and optional JSON via CLI), this will:
-    - Save a reward curve plot under ``outputs/evaluate``
-    - Save one example gameplay video under ``outputs/evaluate``
-    """
+    """Evaluate a single-task agent checkpoint on one game."""
     env = AtariEnv(game, render_mode=None)
 
     if algorithm == "dqn":
@@ -134,7 +172,12 @@ def evaluate_single(model_path: str, game: str, algorithm: str, episodes: int, m
         agent = PPOAgent(state_dim=4, action_dim=env.action_space)
 
     agent.load(model_path)
-    agent.network.eval()
+    if hasattr(agent, 'network'):
+        agent.network.eval()
+    if hasattr(agent, 'actor'):
+        agent.actor.eval()
+    if hasattr(agent, 'critic'):
+        agent.critic.eval()
 
     episode_rewards = []
     with torch.no_grad():
@@ -156,7 +199,6 @@ def evaluate_single(model_path: str, game: str, algorithm: str, episodes: int, m
     print(f"[Single] {game} ({algorithm}) - Episodes: {episodes}")
     print(f"  Avg reward: {avg_r:.2f}, Min: {min(episode_rewards):.2f}, Max: {max(episode_rewards):.2f}")
 
-    # Pack result and generate visualization artifacts
     result = {
         "mode": "single",
         "game": game,
@@ -166,11 +208,9 @@ def evaluate_single(model_path: str, game: str, algorithm: str, episodes: int, m
         "avg_reward": avg_r,
     }
 
-    # 1) Reward curve plot
     plot_path = _plot_single_results(result)
     print(f"  Reward plot saved to: {plot_path}")
 
-    # 2) Example gameplay video
     video_path = _get_eval_dir() / f"{game}_{algorithm}_eval_gameplay.mp4"
     _record_example_video(agent, game, algorithm, video_path, max_steps=max_steps)
     print(f"  Example gameplay video saved to: {video_path}")
@@ -179,23 +219,19 @@ def evaluate_single(model_path: str, game: str, algorithm: str, episodes: int, m
 
 
 def _build_continual_agent(algorithm: str, games: list, use_ewc: bool, ewc_lambda: float):
-    """Rebuild a continual agent architecture for evaluation.
-
-    For DQN, we use MultiHeadDQNAgent with one head per game.
-    For PPO, a single-head PPOAgent is reused across games.
-    """
+    """Rebuild a continual agent architecture for evaluation."""
     if algorithm == "dqn":
         base_agent = MultiHeadDQNAgent(state_dim=4)
-        # Dummy envs just to get action dims
         for game in games:
             env = AtariEnv(game, render_mode=None)
             base_agent.register_task(game, env.action_space)
             env.close()
-    else:
-        # PPO: assume same action space for all games in list; use first game's
-        env0 = AtariEnv(games[0], render_mode=None)
-        base_agent = PPOAgent(state_dim=4, action_dim=env0.action_space)
-        env0.close()
+    else:  # ppo
+        base_agent = MultiHeadPPOAgent(state_dim=4)
+        for game in games:
+            env = AtariEnv(game, render_mode=None)
+            base_agent.register_task(game, env.action_space)
+            env.close()
 
     if use_ewc:
         agent = EWCWrapper(base_agent, ewc_lambda=ewc_lambda)
@@ -217,6 +253,10 @@ def evaluate_continual(model_path: str, games: list, algorithm: str, episodes: i
     agent.load(model_path)
     if hasattr(agent, "network") and agent.network is not None:
         agent.network.eval()
+    if hasattr(agent, 'actor'):
+        agent.actor.eval()
+    if hasattr(agent, 'critic'):
+        agent.critic.eval()
 
     results = {"mode": "continual", "algorithm": algorithm, "games": {}, "episodes": episodes}
 
@@ -255,11 +295,9 @@ def evaluate_continual(model_path: str, games: list, algorithm: str, episodes: i
                 "avg_reward": avg_r,
             }
 
-    # 1) Bar plot of average reward per game
     plot_path = _plot_continual_results(results)
     print(f"\n[Continual] Avg reward plot saved to: {plot_path}")
 
-    # 2) Example gameplay video for **each** game
     for game in games:
         video_path = _get_eval_dir() / f"continual_{algorithm}_{game}_eval_gameplay.mp4"
         _record_example_video(agent, game, algorithm, video_path, max_steps=max_steps)
@@ -283,8 +321,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Configure the eval directory based on --json-out (if provided)
-    _set_eval_dir_from_json_out(args.json_out)
+    _set_eval_dir_from_json_out(args.json_out, args.model, args.mode)
 
     if args.mode == "single":
         if not args.game:

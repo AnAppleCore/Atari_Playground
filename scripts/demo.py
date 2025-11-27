@@ -17,8 +17,8 @@ def demo_basic_usage():
     
     # 1. Create agents
     print("\n1. Creating agents...")
-    dqn_agent = DQNAgent(state_dim=4, action_dim=18)
-    ppo_agent = PPOAgent(state_dim=4, action_dim=18)
+    dqn_agent = DQNAgent(state_dim=4, action_dim=18, lr=1e-4)
+    ppo_agent = PPOAgent(state_dim=4, action_dim=18, lr=2.5e-4)
     print("   ✓ DQN Agent created")
     print("   ✓ PPO Agent created")
     

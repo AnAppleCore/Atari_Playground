@@ -1,8 +1,23 @@
 """Base Agent class for RL algorithms."""
+import inspect
 import torch
 import torch.nn as nn
+import numpy as np
 from abc import ABC, abstractmethod
 from typing import Tuple, Dict, Any
+
+
+_HAS_WEIGHTS_ONLY_ARG = "weights_only" in inspect.signature(torch.load).parameters
+
+
+def safe_torch_load(path: str, map_location=None):
+    """Load checkpoints while explicitly disabling weights_only when available."""
+    load_kwargs = {}
+    if map_location is not None:
+        load_kwargs["map_location"] = map_location
+    if _HAS_WEIGHTS_ONLY_ARG:
+        load_kwargs["weights_only"] = False
+    return torch.load(path, **load_kwargs)
 
 
 class BaseAgent(ABC):
@@ -20,7 +35,6 @@ class BaseAgent(ABC):
         self.state_dim = state_dim
         self.action_dim = action_dim
 
-        # Handle device selection with warning if GPU not available
         if device == "cuda" and not torch.cuda.is_available():
             import warnings
             warnings.warn("CUDA requested but not available, falling back to CPU")
@@ -48,7 +62,8 @@ class BaseAgent(ABC):
     def load(self, path: str):
         """Load the agent's network."""
         if self.network is not None:
-            self.network.load_state_dict(torch.load(path, map_location=self.device))
+            state_dict = safe_torch_load(path, map_location=self.device)
+            self.network.load_state_dict(state_dict)
     
     def get_weights(self) -> Dict[str, torch.Tensor]:
         """Get network weights for EWC."""
@@ -65,34 +80,33 @@ class BaseAgent(ABC):
                 param.data = weights[name].clone()
 
 
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    """Initialize layer with orthogonal weights."""
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
+
+
 class SimpleNet(nn.Module):
     """Simple neural network for Atari."""
 
     def __init__(self, input_channels: int, action_dim: int):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_channels, 32, kernel_size=8, stride=4),
+        self.network = nn.Sequential(
+            nn.Conv2d(input_channels, 32, 8, stride=4),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.Conv2d(32, 64, 4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.Conv2d(64, 64, 3, stride=1),
             nn.ReLU(),
-        )
-
-        # Calculate flattened size
-        self.fc_input_size = 64 * 7 * 7
-
-        self.fc = nn.Sequential(
-            nn.Linear(self.fc_input_size, 512),
+            nn.Flatten(),
+            nn.Linear(3136, 512),
             nn.ReLU(),
             nn.Linear(512, action_dim),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
+        return self.network(x / 255.0)
 
 
 class AtariBackbone(nn.Module):
@@ -103,28 +117,20 @@ class AtariBackbone(nn.Module):
 
     def __init__(self, input_channels: int, feature_dim: int = 512):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(input_channels, 32, kernel_size=8, stride=4),
+        self.network = nn.Sequential(
+            nn.Conv2d(input_channels, 32, 8, stride=4),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.Conv2d(32, 64, 4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.Conv2d(64, 64, 3, stride=1),
             nn.ReLU(),
-        )
-
-        # Flattened size after conv layers for 84x84 input
-        self.fc_input_size = 64 * 7 * 7
-
-        self.fc = nn.Sequential(
-            nn.Linear(self.fc_input_size, feature_dim),
+            nn.Flatten(),
+            nn.Linear(3136, feature_dim),
             nn.ReLU(),
         )
 
         self.feature_dim = feature_dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
+        return self.network(x / 255.0)
 

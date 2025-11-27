@@ -51,29 +51,43 @@ This demonstrates all algorithms without needing ROMs.
 
 ### Single Game Training
 ```bash
-# Train DQN on Pong for 200,000 steps (good for classroom demo)
-python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 200000
+# Train DQN on Pong for 500,000 steps (recommended for good performance)
+python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 500000
 
-# Train PPO on Breakout for 100,000 steps
-python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 100000
+# Train PPO on Breakout for 500,000 steps
+python scripts/train_single.py --game Breakout-v5 --algorithm ppo --steps 500000
+
+# Quick test with fewer steps (for faster iteration)
+python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 100000
+
+# Enable video recording (disabled by default to save memory)
+python scripts/train_single.py --game Pong-v5 --algorithm dqn --steps 100000 --save-video
 ```
 
 **Output (per experiment folder):**
-- MP4 video: `outputs/single/{game}_{algorithm}/training.mp4`
+- MP4 video: `outputs/single/{game}_{algorithm}/training.mp4` (only if `--save-video` is used)
 - Metrics plot: `outputs/single/{game}_{algorithm}/metrics.png`
 - Model checkpoint: `checkpoints/single/{game}_{algorithm}.pt`
 
 ### Continual Learning (Multiple Games)
 ```bash
-# Train on 3 games sequentially WITHOUT EWC (shows catastrophic forgetting)
+# Train DQN on 3 games sequentially WITHOUT EWC (shows catastrophic forgetting)
 python scripts/train_continual.py --algorithm dqn --steps-per-game 50000
 
-# Train on 3 games sequentially WITH EWC (mitigates forgetting)
-python scripts/train_continual.py --algorithm dqn --use-ewc --ewc-lambda 50.0 --steps-per-game 50000
+# Train DQN on 3 games sequentially WITH EWC (mitigates forgetting)
+python scripts/train_continual.py --algorithm dqn --use-ewc --ewc-lambda 0.4 --steps-per-game 50000
+
+# Train PPO on 3 games sequentially WITHOUT EWC
+python scripts/train_continual.py --algorithm ppo --steps-per-game 50000
+
+# Train PPO on 3 games sequentially WITH EWC
+python scripts/train_continual.py --algorithm ppo --use-ewc --ewc-lambda 0.4 --steps-per-game 50000
 ```
 
+**Note:** Both DQN and PPO support continual learning with different action spaces. The framework automatically uses multi-head architectures (MultiHeadDQNAgent and MultiHeadPPOAgent) to handle games with different action dimensions.
+
 **Output (per experiment + per game folders):**
-- Per-game training videos: `outputs/continual/{algorithm}_ewc{True/False}/{game}/training.mp4`
+- Per-game training videos: `outputs/continual/{algorithm}_ewc{True/False}/{game}/training.mp4` (only if `--save-video` is used)
 - Aggregated training metrics: `outputs/continual/{algorithm}_ewc{True/False}/training_metrics.png`
 - Forgetting curves: `outputs/continual/{algorithm}_ewc{True/False}/forgetting_eval.png`
 - Model checkpoint: `checkpoints/continual/{algorithm}_ewc{True/False}.pt`
@@ -86,18 +100,52 @@ The framework supports 108 Atari games. Common ones:
 - Atari-v5 (18 actions)
 - And 104 more...
 
-### Training Parameters
+### Training Script Parameters
+
+**Single-game training (`scripts/train_single.py`):**
 ```bash
-# Common parameters for all training scripts:
---game GAME_NAME          # Game to train on (default: Pong-v5)
---algorithm {dqn,ppo}     # Algorithm to use (default: dqn)
---steps STEPS             # Total training steps (single game, default: 200000)
---steps-per-game STEPS    # Steps per game in continual learning (default: 50000)
---use-ewc                 # Enable EWC for continual learning
---ewc-lambda LAMBDA       # EWC regularization strength (e.g., 10.0, 50.0)
---batch-size BATCH_SIZE   # Batch size for training (default: 32)
---no-video                # Disable video recording for speed
+--game GAME_NAME        # Game to train on (default: Pong-v5)
+--algorithm {dqn,ppo}   # Algorithm to use (default: dqn)
+--steps STEPS           # Total training steps (default: 500000)
+--batch-size BATCH_SIZE # Batch size for training (default: 32)
+--save-video            # Enable video recording (disabled by default)
 ```
+
+**Continual learning training (`scripts/train_continual.py`):**
+```bash
+--games GAME1 GAME2 ... # List of games (default: Pong-v5 Breakout-v5 SpaceInvaders-v5)
+--algorithm {dqn,ppo}   # Algorithm to use (default: dqn)
+--steps-per-game STEPS  # Steps per game (default: 50000)
+--batch-size BATCH_SIZE # Batch size for training (default: 32, used for DQN updates)
+--save-video            # Enable video recording (disabled by default)
+
+--use-ewc               # (Optional) Enable EWC for continual learning
+--ewc-lambda LAMBDA     # EWC regularization strength (default: 0.4)
+```
+
+**Default Hyperparameters (optimized for Atari games):**
+
+*DQN:*
+- Learning rate: `1e-4`
+- Batch size: `32`
+- Gamma (discount factor): `0.99`
+- Epsilon: `1.0` → `0.01` (linear decay over 10% of total steps)
+- Learning starts: `80000` steps
+- Target network update frequency: `1000` steps
+- Train frequency: Every `4` steps
+- Replay buffer size: `100,000`
+
+*PPO:*
+- Learning rate: `2.5e-4`
+- Batch size: `32` (minibatch)
+- Gamma (discount factor): `0.99`
+- GAE lambda: `0.95`
+- Clip coefficient: `0.1`
+- Entropy coefficient: `0.01`
+- Value function coefficient: `0.5`
+- Max gradient norm: `0.5`
+- Rollout length: `128` steps
+- Update epochs: `4`
 ## Evaluation Guide
 
 ### Single Game Evaluation
@@ -110,13 +158,13 @@ python scripts/evaluate.py \
   --game Pong-v5 \
   --episodes 10 \
   --max-steps 10000 \
-  --json-out outputs/experiments/single/Pong-v5_dqn/eval/metrics.json
+  --json-out outputs/single/Pong-v5_dqn/eval/metrics.json
 ```
 
 **Output (per experiment folder):**
-- JSON metrics: `outputs/experiments/single/{game}_{algorithm}/eval/metrics.json`
-- Evaluation curve: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_rewards.png`
-- Example gameplay video: `outputs/experiments/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_gameplay.mp4`
+- JSON metrics: `outputs/single/{game}_{algorithm}/eval/metrics.json`
+- Evaluation curve: `outputs/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_rewards.png`
+- Example gameplay video: `outputs/single/{game}_{algorithm}/eval/{game}_{algorithm}_eval_gameplay.mp4`
 
 You can also run all four default single-game evaluations via:
 ```bash
@@ -133,13 +181,25 @@ python scripts/evaluate.py \
   --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
   --episodes 5 \
   --max-steps 10000 \
-  --json-out outputs/experiments/continual/dqn_ewcFalse/eval/metrics.json
+  --json-out outputs/continual/dqn_ewcFalse/eval/metrics.json
+
+# Evaluate a PPO continual model with EWC
+python scripts/evaluate.py \
+  --mode continual \
+  --model checkpoints/continual/ppo_ewcTrue.pt \
+  --algorithm ppo \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --ewc \
+  --ewc-lambda 0.4 \
+  --json-out outputs/continual/ppo_ewcTrue/eval/metrics.json
 ```
 
 **Output (per continual experiment folder):**
-- JSON metrics: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/metrics.json`
-- Avg reward per game bar plot: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_avg_rewards.png`
-- One gameplay video per game: `outputs/experiments/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_{game}_eval_gameplay.mp4`
+- JSON metrics: `outputs/continual/{algorithm}_ewc{True/False}/eval/metrics.json`
+- Avg reward per game bar plot: `outputs/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_avg_rewards.png`
+- One gameplay video per game: `outputs/continual/{algorithm}_ewc{True/False}/eval/continual_{algorithm}_{game}_eval_gameplay.mp4`
 
 You can also run all four default continual evaluations via:
 ```bash
@@ -154,14 +214,16 @@ bash run_evaluate_continual.sh
 Atari_Playground/
 ├── algorithms/              # Algorithm implementations
 │   ├── base.py             # BaseAgent and SimpleNet CNN
-│   ├── dqn.py              # DQN algorithm
-│   ├── ppo.py              # PPO algorithm
-│   └── ewc.py              # EWC wrapper
+│   ├── dqn.py              # DQN algorithm (includes MultiHeadDQNAgent for continual learning)
+│   ├── ppo.py              # PPO algorithm (includes MultiHeadPPOAgent for continual learning)
+│   └── ewc.py              # EWC wrapper (supports multi-task continual learning)
 ├── environments/            # Game environments
 │   └── atari_env.py        # Atari environment wrapper
 ├── utils/                  # Utility functions
-│   ├── replay_buffer.py    # Experience replay buffer
-│   └── visualization.py    # Visualization tools
+│   ├── replay_buffer.py    # Experience replay buffer (for DQN-style algorithms)
+│   ├── rollout_buffer.py   # Rollout buffer (for PPO/on-policy algorithms)
+│   ├── atari_wrappers.py   # Atari-specific preprocessing wrappers (NoopResetEnv, etc.)
+│   └── visualization.py    # Video recording & metrics plotting utilities
 ├── scripts/                # Training scripts
 │   ├── train_single.py     # Single game training
 │   ├── train_continual.py  # Multi-game continual learning
@@ -169,7 +231,7 @@ Atari_Playground/
 │   ├── full_demo.py        # Comprehensive demo
 │   └── visualize_results.py # Results visualization
 ├── configs/                # Configuration files
-├── outputs/                # Training outputs (GIFs, videos)
+├── outputs/                # Training outputs (MP4 videos)
 ├── checkpoints/            # Model checkpoints
 ├── README.md               # English documentation
 ├── README_CN.md            # Chinese tutorial
@@ -186,6 +248,7 @@ Atari_Playground/
 - **Key Techniques**: Experience replay, target networks, ε-greedy exploration
 - **Pros**: Stable, reliable
 - **Cons**: Slower convergence
+- **Continual Learning**: Uses MultiHeadDQNAgent with shared backbone and per-task output heads
 
 ### PPO (Proximal Policy Optimization)
 - **Goal**: Learn optimal policy π(a|s)
@@ -193,12 +256,14 @@ Atari_Playground/
 - **Key Techniques**: Advantage estimation, policy clipping, entropy regularization
 - **Pros**: Fast learning, stable
 - **Cons**: Requires more samples
+- **Continual Learning**: Uses MultiHeadPPOAgent with shared backbone and per-task actor/critic heads
 
 ### EWC (Elastic Weight Consolidation)
 - **Goal**: Retain knowledge of old tasks while learning new ones
-- **Method**: Use Fisher Information Matrix to protect important weights
+- **Method**: Use Fisher Information Matrix (computed from gradient squares) to protect important weights
 - **Effect**: Mitigate catastrophic forgetting
 - **Application**: Continual learning, lifelong learning
+- **Features**: Supports multi-task EWC by storing weights and Fisher Information for each previous task
 
 ## Understanding Catastrophic Forgetting
 
@@ -226,7 +291,7 @@ A: Yes, but it will be slower. The framework auto-detects GPU.
 A: 108 Atari games including Pong, Breakout, SpaceInvaders, and more.
 
 **Q: How do I visualize results?**
-A: MP4 videos and PNG metric plots are automatically generated in `outputs/` during training.
+A: PNG metric plots are automatically generated in `outputs/` during training. Videos are only generated if you use the `--save-video` flag (disabled by default to save memory during long training runs).
 
 **Q: Can I modify parameters?**
 A: Yes! See the "Training Parameters" section above for all available options.

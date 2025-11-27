@@ -25,8 +25,8 @@ LOG_DIR="logs"
 mkdir -p "${LOG_DIR}"
 
 # You can adjust these two hyperparameters manually if needed
-STEPS_PER_GAME=50000
-EWC_LAMBDA=50.0
+STEPS_PER_GAME=500000
+EWC_LAMBDA=0.4
 
 # Detect number of available GPUs (if any)
 NUM_GPUS=0
@@ -47,7 +47,7 @@ echo "Steps per game: ${STEPS_PER_GAME}, EWC lambda: ${EWC_LAMBDA}"
 
 # Job 1: DQN without EWC
 JOB_IDX=0
-DQN_NO_EWC_TRAIN_DIR="outputs/experiments/continual/dqn_ewcFalse/train"
+DQN_NO_EWC_TRAIN_DIR="outputs/continual/dqn_ewcFalse"
 mkdir -p "${DQN_NO_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
@@ -67,7 +67,7 @@ PID1=$!
 
 # Job 2: DQN with EWC
 JOB_IDX=1
-DQN_EWC_TRAIN_DIR="outputs/experiments/continual/dqn_ewcTrue/train"
+DQN_EWC_TRAIN_DIR="outputs/continual/dqn_ewcTrue"
 mkdir -p "${DQN_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
@@ -91,7 +91,7 @@ PID2=$!
 
 # Job 3: PPO without EWC
 JOB_IDX=2
-PPO_NO_EWC_TRAIN_DIR="outputs/experiments/continual/ppo_ewcFalse/train"
+PPO_NO_EWC_TRAIN_DIR="outputs/continual/ppo_ewcFalse"
 mkdir -p "${PPO_NO_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))
@@ -111,7 +111,7 @@ PID3=$!
 
 # Job 4: PPO with EWC
 JOB_IDX=3
-PPO_EWC_TRAIN_DIR="outputs/experiments/continual/ppo_ewcTrue/train"
+PPO_EWC_TRAIN_DIR="outputs/continual/ppo_ewcTrue"
 mkdir -p "${PPO_EWC_TRAIN_DIR}"
 if [ "${NUM_GPUS}" -ge 1 ]; then
   GPU_ID=$((JOB_IDX % NUM_GPUS))

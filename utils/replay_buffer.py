@@ -37,7 +37,6 @@ class ReplayBuffer:
     
     def sample(self, batch_size: int) -> Dict[str, torch.Tensor]:
         """Sample a batch of experiences."""
-        # Ensure batch_size doesn't exceed buffer size
         actual_batch_size = min(batch_size, len(self.buffer))
         replace = len(self.buffer) < batch_size
 

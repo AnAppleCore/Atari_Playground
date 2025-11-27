@@ -17,7 +17,7 @@ def visualize_agent(
     algorithm: str = "dqn",
     num_episodes: int = 3,
     output_path: str = None,
-    fps: int = 15,
+    fps: int = 30,
     video_format: str = "mp4",
     max_steps: int = 10000,
 ):
@@ -30,7 +30,7 @@ def visualize_agent(
         algorithm: Algorithm used (dqn or ppo)
         num_episodes: Number of episodes to record
         output_path: Path to save video (default: outputs/{game}_{algorithm}.{format})
-        fps: Frames per second (default: 15, lower = slower playback)
+        fps: Frames per second (default: 30)
         video_format: Video format ('mp4' or 'gif')
         max_steps: Maximum steps per episode
     """
@@ -41,8 +41,7 @@ def visualize_agent(
     
     print(f"Loading model from {model_path}...")
 
-    # Create environment with rendering enabled
-    env = AtariEnv(game_name, render_mode="rgb_array")
+    env = AtariEnv(game_name, render_mode="rgb_array", use_skip=False)
     
     # Create agent
     if algorithm == "dqn":
@@ -52,10 +51,15 @@ def visualize_agent(
     
     # Load model
     agent.load(model_path)
-    agent.network.eval()  # Set to evaluation mode
+    # Set to eval mode
+    if hasattr(agent, 'network'):
+        agent.network.eval()
+    if hasattr(agent, 'actor'):
+        agent.actor.eval()
+    if hasattr(agent, 'critic'):
+        agent.critic.eval()
     print(f"✓ Model loaded successfully")
     
-    # Create video recorder
     video_recorder = VideoRecorder(output_path, fps=fps)
     print(f"Recording {num_episodes} episodes with {fps} FPS...")
     
@@ -68,8 +72,25 @@ def visualize_agent(
             episode_reward = 0
             
             for step in range(max_steps):
-                # Get frame for visualization (use original observation)
-                frame = env.env.render()
+                frame = None
+                try:
+                    if hasattr(env.env, 'render'):
+                        frame = env.env.render()
+                    if frame is None and hasattr(env.env, 'unwrapped'):
+                        unwrapped = env.env.unwrapped
+                        if hasattr(unwrapped, 'render'):
+                            frame = unwrapped.render()
+                    if frame is None:
+                        if isinstance(state, torch.Tensor):
+                            frame = state[0].cpu().numpy()
+                        else:
+                            frame = state[0] if len(state.shape) > 2 else state
+                except Exception:
+                    if isinstance(state, torch.Tensor):
+                        frame = state[0].cpu().numpy()
+                    else:
+                        frame = state[0] if len(state.shape) > 2 else state
+                
                 if frame is not None:
                     video_recorder.add_frame(frame)
                 
@@ -111,8 +132,8 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=3, 
                        help="Number of episodes to record (default: 3)")
     parser.add_argument("--output", help="Output video path")
-    parser.add_argument("--fps", type=int, default=15, 
-                       help="Frames per second (default: 15, lower = slower)")
+    parser.add_argument("--fps", type=int, default=30, 
+                       help="Frames per second (default: 30)")
     parser.add_argument("--format", choices=["mp4", "gif"], default="mp4",
                        help="Video format (default: mp4)")
     parser.add_argument("--max-steps", type=int, default=10000,

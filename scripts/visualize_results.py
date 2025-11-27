@@ -1,4 +1,10 @@
-"""Visualize training results from experiments."""
+"""Visualize training or evaluation results from experiments.
+
+This script looks for JSON metrics files (e.g. metrics.json) under a
+given directory and produces comparison plots. It is compatible with
+JSON outputs produced by evaluation scripts (such as scripts/evaluate.py)
+as long as they contain basic reward / loss information.
+"""
 import sys
 import json
 import numpy as np
@@ -216,8 +222,8 @@ def compare_ewc_effect(results_dir: str, output_path: str = "outputs/ewc_compari
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Visualize training results")
-    parser.add_argument("--results-dir", default="results", help="Directory with experiment results")
+    parser = argparse.ArgumentParser(description="Visualize training or evaluation results")
+    parser.add_argument("--results-dir", default="outputs", help="Directory with experiment/evaluation results")
     parser.add_argument("--type", choices=["curves", "comparison", "ewc"], default="curves",
                        help="Type of visualization")
     parser.add_argument("--output", help="Output path for the plot")
