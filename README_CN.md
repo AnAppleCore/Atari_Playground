@@ -430,3 +430,4 @@ MIT License - 自由使用和修改
 - [PPO 论文](https://arxiv.org/abs/1707.06347)
 - [EWC 论文](https://arxiv.org/abs/1612.00796)
 - [Gymnasium 文档](https://gymnasium.farama.org/)
+- [CleanRL](https://github.com/vwxyzjn/cleanrl)

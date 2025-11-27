@@ -322,6 +322,7 @@ A: Check the console output. You should see "CUDA" or "GPU" messages if GPU is a
 - [PPO Paper](https://arxiv.org/abs/1707.06347)
 - [EWC Paper](https://arxiv.org/abs/1612.00796)
 - [Gymnasium Documentation](https://gymnasium.farama.org/)
+- [CleanRL](https://github.com/vwxyzjn/cleanrl)
 
 ## License
 
