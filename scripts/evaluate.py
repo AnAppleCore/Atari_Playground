@@ -23,7 +23,10 @@ def _infer_eval_dir_from_model_path(model_path: str, mode: str) -> Path:
     if mode == "single":
         checkpoint_name = model_path.stem
         eval_dir = Path("outputs") / "single" / checkpoint_name / "eval"
-    else:
+    elif mode == "multitask":
+        checkpoint_name = model_path.stem
+        eval_dir = Path("outputs") / "multitask" / checkpoint_name / "eval"
+    else:  # continual
         checkpoint_name = model_path.stem
         eval_dir = Path("outputs") / "continual" / checkpoint_name / "eval"
     return eval_dir
@@ -81,6 +84,28 @@ def _plot_continual_results(result: dict) -> Path:
     plt.figure(figsize=(6, 4))
     plt.bar(games, avg_rewards)
     plt.title(f"Continual {algorithm.upper()} Avg Reward per Game")
+    plt.xlabel("Game")
+    plt.ylabel("Average Reward")
+    plt.xticks(rotation=30, ha="right")
+    plt.tight_layout()
+    plt.savefig(plot_path, dpi=150)
+    plt.close()
+
+    return plot_path
+
+
+def _plot_multitask_results(result: dict) -> Path:
+    """Plot average reward per game for multi-task evaluation."""
+    out_dir = _get_eval_dir()
+    algorithm = result["algorithm"]
+    games = sorted(result["games"].keys())
+    avg_rewards = [result["games"][g]["avg_reward"] for g in games]
+
+    plot_path = out_dir / f"multitask_{algorithm}_avg_rewards.png"
+
+    plt.figure(figsize=(6, 4))
+    plt.bar(games, avg_rewards)
+    plt.title(f"Multi-task {algorithm.upper()} Avg Reward per Game")
     plt.xlabel("Game")
     plt.ylabel("Average Reward")
     plt.xticks(rotation=30, ha="right")
@@ -306,13 +331,78 @@ def evaluate_continual(model_path: str, games: list, algorithm: str, episodes: i
     return results
 
 
+def evaluate_multitask(model_path: str, games: list, algorithm: str, episodes: int, max_steps: int):
+    """Evaluate a multi-task joint training agent on a list of games.
+
+    In addition to printing statistics (and optional JSON via CLI), this will:
+    - Save a bar plot of average reward per game under the experiment's eval dir
+    - Save one example gameplay video **per game** under the same directory
+    """
+    print(f"Loading multi-task agent from {model_path}...")
+    agent = _build_continual_agent(algorithm, games, use_ewc=False, ewc_lambda=0.4)
+    agent.load(model_path)
+    if hasattr(agent, "network") and agent.network is not None:
+        agent.network.eval()
+    if hasattr(agent, 'actor'):
+        agent.actor.eval()
+    if hasattr(agent, 'critic'):
+        agent.critic.eval()
+
+    results = {"mode": "multitask", "algorithm": algorithm, "games": {}, "episodes": episodes}
+
+    with torch.no_grad():
+        for game in games:
+            print(f"\n[Multi-task] Evaluating on {game} ...")
+            env = AtariEnv(game, render_mode=None)
+
+            # For MultiHeadDQN, select the appropriate head
+            if hasattr(agent, "set_task"):
+                try:
+                    agent.set_task(game)
+                except Exception:
+                    pass
+
+            episode_rewards = []
+            for _ in range(episodes):
+                state = env.reset()
+                done = False
+                ep_r = 0.0
+                steps = 0
+                while not done and steps < max_steps:
+                    action = agent.select_action(state)
+                    state, reward, done = env.step(action)
+                    ep_r += reward
+                    steps += 1
+                episode_rewards.append(ep_r)
+
+            env.close()
+
+            avg_r = sum(episode_rewards) / len(episode_rewards)
+            print(f"  Avg reward: {avg_r:.2f}, Min: {min(episode_rewards):.2f}, Max: {max(episode_rewards):.2f}")
+
+            results["games"][game] = {
+                "rewards": episode_rewards,
+                "avg_reward": avg_r,
+            }
+
+    plot_path = _plot_multitask_results(results)
+    print(f"\n[Multi-task] Avg reward plot saved to: {plot_path}")
+
+    for game in games:
+        video_path = _get_eval_dir() / f"multitask_{algorithm}_{game}_eval_gameplay.mp4"
+        _record_example_video(agent, game, algorithm, video_path, max_steps=max_steps)
+        print(f"[Multi-task] Example gameplay video for {game} saved to: {video_path}")
+
+    return results
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate trained Atari agents")
-    parser.add_argument("--mode", choices=["single", "continual"], default="single")
+    parser.add_argument("--mode", choices=["single", "continual", "multitask"], default="single")
     parser.add_argument("--model", required=True, help="Path to model checkpoint")
     parser.add_argument("--algorithm", choices=["dqn", "ppo"], default="dqn")
     parser.add_argument("--game", help="Game name for single mode (e.g., Pong-v5)")
-    parser.add_argument("--games", nargs="*", help="List of games for continual mode")
+    parser.add_argument("--games", nargs="*", help="List of games for continual/multitask mode")
     parser.add_argument("--episodes", type=int, default=5, help="Episodes per game")
     parser.add_argument("--max-steps", type=int, default=10000, help="Max steps per episode")
     parser.add_argument("--ewc", action="store_true", help="Use EWC wrapper for continual DQN/PPO")
@@ -333,7 +423,18 @@ if __name__ == "__main__":
             episodes=args.episodes,
             max_steps=args.max_steps,
         )
-    else:
+    elif args.mode == "multitask":
+        games = args.games
+        if not games:
+            raise SystemExit("--games is required for multitask mode")
+        result = evaluate_multitask(
+            model_path=args.model,
+            games=games,
+            algorithm=args.algorithm,
+            episodes=args.episodes,
+            max_steps=args.max_steps,
+        )
+    else:  # continual
         games = args.games
         if not games:
             raise SystemExit("--games is required for continual mode")

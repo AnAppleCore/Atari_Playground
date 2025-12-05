@@ -92,6 +92,25 @@ python scripts/train_continual.py --algorithm ppo --use-ewc --ewc-lambda 0.4 --s
 - Forgetting curves: `outputs/continual/{algorithm}_ewc{True/False}/forgetting_eval.png`
 - Model checkpoint: `checkpoints/continual/{algorithm}_ewc{True/False}.pt`
 
+### Multi-task Joint Training (Multiple Games)
+```bash
+# Train DQN on 3 games jointly (random task sampling per iteration)
+python scripts/train_multitask.py --algorithm dqn --steps 150000
+
+# Train PPO on 3 games jointly (random task sampling per iteration)
+python scripts/train_multitask.py --algorithm ppo --steps 150000
+
+# Custom games list
+python scripts/train_multitask.py --algorithm dqn --games Pong-v5 Breakout-v5 --steps 100000
+```
+
+**Note:** Multi-task training uses random task sampling - each iteration randomly selects one game to collect data and update. Each game maintains its own buffer. This is different from continual learning which trains games sequentially.
+
+**Output (per experiment + per game folders):**
+- Per-game training videos: `outputs/multitask/{algorithm}/{game}/training.mp4` (only if `--save-video` is used)
+- Aggregated training metrics: `outputs/multitask/{algorithm}/training_metrics.png`
+- Model checkpoint: `checkpoints/multitask/{algorithm}.pt`
+
 ### Available Games
 The framework supports 108 Atari games. Common ones:
 - Pong-v5 (6 actions)
@@ -121,6 +140,15 @@ The framework supports 108 Atari games. Common ones:
 
 --use-ewc               # (Optional) Enable EWC for continual learning
 --ewc-lambda LAMBDA     # EWC regularization strength (default: 0.4)
+```
+
+**Multi-task joint training (`scripts/train_multitask.py`):**
+```bash
+--games GAME1 GAME2 ... # List of games (default: Pong-v5 Breakout-v5 SpaceInvaders-v5)
+--algorithm {dqn,ppo}   # Algorithm to use (default: dqn)
+--steps STEPS           # Total training steps across all games (default: 150000)
+--batch-size BATCH_SIZE # Batch size for training (default: 32, used for DQN updates)
+--save-video            # Enable video recording (disabled by default)
 ```
 
 **Default Hyperparameters (optimized for Atari games):**
@@ -206,6 +234,39 @@ You can also run all four default continual evaluations via:
 bash run_evaluate_continual.sh
 ```
 
+### Multi-task Joint Training Evaluation
+```bash
+# Evaluate a trained multi-task model (e.g., DQN)
+python scripts/evaluate.py \
+  --mode multitask \
+  --model checkpoints/multitask/dqn.pt \
+  --algorithm dqn \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --json-out outputs/multitask/dqn/eval/metrics.json
+
+# Evaluate a PPO multi-task model
+python scripts/evaluate.py \
+  --mode multitask \
+  --model checkpoints/multitask/ppo.pt \
+  --algorithm ppo \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --json-out outputs/multitask/ppo/eval/metrics.json
+```
+
+**Output (per multi-task experiment folder):**
+- JSON metrics: `outputs/multitask/{algorithm}/eval/metrics.json`
+- Avg reward per game bar plot: `outputs/multitask/{algorithm}/eval/multitask_{algorithm}_avg_rewards.png`
+- One gameplay video per game: `outputs/multitask/{algorithm}/eval/multitask_{algorithm}_{game}_eval_gameplay.mp4`
+
+You can also run all default multi-task evaluations via:
+```bash
+bash run_evaluate_multitask.sh
+```
+
 
 
 ## Project Structure
@@ -227,12 +288,21 @@ Atari_Playground/
 ├── scripts/                # Training scripts
 │   ├── train_single.py     # Single game training
 │   ├── train_continual.py  # Multi-game continual learning
+│   ├── train_multitask.py  # Multi-game joint training
+│   ├── evaluate.py         # Model evaluation script
 │   ├── demo.py             # Framework demo
 │   ├── full_demo.py        # Comprehensive demo
 │   └── visualize_results.py # Results visualization
 ├── configs/                # Configuration files
 ├── outputs/                # Training outputs (MP4 videos)
 ├── checkpoints/            # Model checkpoints
+├── logs/                   # Training logs
+├── run_four_experiments.sh # Run 4 single-game experiments in parallel (Pong/Breakout x DQN/PPO)
+├── run_continual_experiments.sh # Run 4 continual learning experiments in parallel (DQN/PPO x no-EWC/EWC)
+├── run_multitask.sh        # Run 2 multi-task joint training experiments in parallel (DQN/PPO)
+├── run_evaluate_single.sh  # Evaluate all 4 single-game trained models
+├── run_evaluate_continual.sh # Evaluate all 4 continual learning trained models
+├── run_evaluate_multitask.sh # Evaluate all 2 multi-task trained models
 ├── README.md               # English documentation
 ├── README_CN.md            # Chinese tutorial
 ├── test_framework.py       # Test suite
@@ -264,6 +334,13 @@ Atari_Playground/
 - **Effect**: Mitigate catastrophic forgetting
 - **Application**: Continual learning, lifelong learning
 - **Features**: Supports multi-task EWC by storing weights and Fisher Information for each previous task
+
+### Multi-task Joint Training
+- **Goal**: Learn multiple tasks simultaneously with random task sampling
+- **Method**: Each iteration randomly samples one task, collects data, and updates the network
+- **Architecture**: Uses MultiHeadDQNAgent or MultiHeadPPOAgent with shared backbone and per-task heads
+- **Difference from Continual**: Tasks are trained jointly (random sampling) rather than sequentially
+- **Features**: Each task maintains its own buffer (ReplayBuffer for DQN, RolloutBuffer for PPO)
 
 ## Understanding Catastrophic Forgetting
 

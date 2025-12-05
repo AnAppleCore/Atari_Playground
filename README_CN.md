@@ -109,6 +109,28 @@ python scripts/train_continual.py --algorithm ppo --use-ewc --ewc-lambda 0.4 --s
 - 📉 遗忘曲线: `outputs/continual/{algorithm}_ewc{True/False}/forgetting_eval.png`
 - 💾 训练模型: `checkpoints/continual/{algorithm}_ewc{True/False}.pt`
 
+### 方式3：多任务联合训练（多个游戏）
+
+让AI同时学习多个游戏，每次迭代随机选择一个游戏进行训练
+
+```bash
+# 使用DQN联合训练3个游戏（随机任务采样）
+python scripts/train_multitask.py --algorithm dqn --steps 150000
+
+# 使用PPO联合训练3个游戏（随机任务采样）
+python scripts/train_multitask.py --algorithm ppo --steps 150000
+
+# 自定义游戏列表
+python scripts/train_multitask.py --algorithm dqn --games Pong-v5 Breakout-v5 --steps 100000
+```
+
+**注意：** 多任务训练使用随机任务采样 - 每次迭代随机选择一个游戏收集数据并更新。每个游戏维护自己的缓冲区。这与连续学习不同，连续学习是按顺序训练游戏。
+
+**输出文件（按实验 + 按游戏分文件夹）：**
+- 📹 每个游戏的训练录像: `outputs/multitask/{algorithm}/{game}/training.mp4` (仅在使用 `--save-video` 时生成)
+- 📈 整体训练曲线: `outputs/multitask/{algorithm}/training_metrics.png`
+- 💾 训练模型: `checkpoints/multitask/{algorithm}.pt`
+
 ## 📊 理解结果
 
 ### 什么是"灾难性遗忘"？
@@ -169,6 +191,21 @@ EWC（弹性权重巩固）就像给AI的大脑做"笔记"：
 # EWC 参数（仅连续学习）
 --use-ewc                   # 启用 EWC
 --ewc-lambda LAMBDA         # EWC 强度 (默认: 0.4)
+```
+
+### 多任务联合训练脚本 (`scripts/train_multitask.py`)
+
+```bash
+# 游戏列表
+--games GAME1 GAME2 ...     # 游戏名称列表 (默认: Pong-v5 Breakout-v5 SpaceInvaders-v5)
+
+# 算法选择
+--algorithm {dqn,ppo}       # 算法 (默认: dqn)
+
+# 训练参数
+--steps STEPS               # 所有游戏的总训练步数 (默认: 150000)
+--batch-size BATCH_SIZE     # 批大小 (默认: 32，用于 DQN 更新)
+--save-video                # 启用视频录制（默认关闭以节省内存）
 ```
 
 **默认超参数（针对Atari游戏优化）：**
@@ -263,6 +300,43 @@ python scripts/evaluate.py \
 bash run_evaluate_continual.sh
 ```
 
+### 方式3：评估多任务联合训练模型
+
+对于多任务联合训练（多个游戏）的模型，使用 `scripts/evaluate.py`：
+
+```bash
+# 例如：评估一个 DQN 多任务模型
+python scripts/evaluate.py \
+  --mode multitask \
+  --model checkpoints/multitask/dqn.pt \
+  --algorithm dqn \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --json-out outputs/multitask/dqn/eval/metrics.json
+
+# 评估一个 PPO 多任务模型
+python scripts/evaluate.py \
+  --mode multitask \
+  --model checkpoints/multitask/ppo.pt \
+  --algorithm ppo \
+  --games Pong-v5 Breakout-v5 SpaceInvaders-v5 \
+  --episodes 5 \
+  --max-steps 10000 \
+  --json-out outputs/multitask/ppo/eval/metrics.json
+```
+
+**输出文件（每个多任务实验一个文件夹）：**
+- 📄 JSON 指标: `outputs/multitask/{algorithm}/eval/metrics.json`
+- 📊 各个游戏平均奖励柱状图: `outputs/multitask/{algorithm}/eval/multitask_{algorithm}_avg_rewards.png`
+- 🎬 每个游戏各自一段评估录像: `outputs/multitask/{algorithm}/eval/multitask_{algorithm}_{game}_eval_gameplay.mp4`
+
+同样也可以一键评估所有默认的多任务实验：
+
+```bash
+bash run_evaluate_multitask.sh
+```
+
 
 
 **示例：**
@@ -298,13 +372,22 @@ Atari_Playground/
 │   └── visualization.py    # 视频录制与指标可视化
 ├── scripts/                # 训练脚本
 │   ├── train_single.py     # 训练单个游戏
-│   ├── train_continual.py  # 训练多个游戏
+│   ├── train_continual.py  # 训练多个游戏（连续学习）
+│   ├── train_multitask.py  # 训练多个游戏（联合训练）
+│   ├── evaluate.py         # 模型评估脚本
 │   ├── demo.py             # 框架演示
 │   ├── full_demo.py        # 完整演示
 │   └── visualize_results.py # 结果可视化
 ├── configs/                # 配置文件
 ├── outputs/                # 训练输出（MP4 视频）
 ├── checkpoints/            # 模型检查点
+├── logs/                   # 训练日志
+├── run_four_experiments.sh # 并行运行4个单游戏训练实验（Pong/Breakout x DQN/PPO）
+├── run_continual_experiments.sh # 并行运行4个连续学习实验（DQN/PPO x 无EWC/有EWC）
+├── run_multitask.sh        # 并行运行2个多任务联合训练实验（DQN/PPO）
+├── run_evaluate_single.sh  # 评估所有4个单游戏训练模型
+├── run_evaluate_continual.sh # 评估所有4个连续学习模型
+├── run_evaluate_multitask.sh # 评估所有2个多任务训练模型
 ├── README.md               # 英文说明
 ├── README_CN.md            # 中文教程
 ├── test_framework.py       # 测试套件
@@ -398,6 +481,13 @@ PPO 通常学得更快，更稳定。
 - **效果**: 减轻灾难性遗忘
 - **应用**: 连续学习、终身学习
 - **特性**: 支持多任务 EWC，为每个之前的任务保存权重和 Fisher 信息
+
+### 多任务联合训练
+- **目标**: 通过随机任务采样同时学习多个任务
+- **方法**: 每次迭代随机选择一个任务，收集数据并更新网络
+- **架构**: 使用 MultiHeadDQNAgent 或 MultiHeadPPOAgent，共享 backbone 和每个任务独立的输出头
+- **与连续学习的区别**: 任务是联合训练的（随机采样）而不是按顺序训练
+- **特性**: 每个任务维护自己的缓冲区（DQN 用 ReplayBuffer，PPO 用 RolloutBuffer）
 
 ## 🔧 故障排除
 
