@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from algorithms import DQNAgent, PPOAgent, EWCWrapper
-from utils import ReplayBuffer
+from utils import ReplayBuffer, RolloutBuffer
 
 
 def demo_basic_usage():
@@ -22,13 +22,15 @@ def demo_basic_usage():
     print("   ✓ DQN Agent created")
     print("   ✓ PPO Agent created")
     
-    # 2. Create replay buffer
-    print("\n2. Creating replay buffer...")
-    buffer = ReplayBuffer(capacity=10000)
-    print("   ✓ Replay buffer created (capacity: 10000)")
+    # 2. Create buffers
+    print("\n2. Creating buffers...")
+    dqn_buffer = ReplayBuffer(capacity=10000)
+    ppo_buffer = RolloutBuffer(capacity=128)
+    print("   ✓ Replay buffer created for DQN (capacity: 10000)")
+    print("   ✓ Rollout buffer created for PPO (capacity: 128)")
     
-    # 3. Simulate experience collection
-    print("\n3. Simulating experience collection...")
+    # 3. Simulate experience collection for DQN
+    print("\n3. Simulating experience collection for DQN...")
     for i in range(100):
         state = torch.randn(4, 84, 84)
         action = 0
@@ -36,10 +38,31 @@ def demo_basic_usage():
         next_state = torch.randn(4, 84, 84)
         done = False
         
-        buffer.add(state, action, reward, next_state, done)
+        dqn_buffer.add(state, action, reward, next_state, done)
     
-    print(f"   ✓ Collected 100 experiences")
-    print(f"   ✓ Buffer size: {len(buffer)}")
+    print(f"   ✓ Collected 100 experiences for DQN")
+    print(f"   ✓ DQN Buffer size: {len(dqn_buffer)}")
+    
+    # 3b. Simulate experience collection for PPO
+    print("\n3b. Simulating experience collection for PPO...")
+    rollout_length = 128
+    for i in range(rollout_length):
+        state = torch.randn(4, 84, 84)
+        state_tensor = state.unsqueeze(0).to(ppo_agent.device)
+        
+        with torch.no_grad():
+            action_tensor, log_prob, _, value = ppo_agent.get_action_and_value(state_tensor)
+            action = action_tensor.item()
+            log_prob_val = log_prob.item()
+            value_val = value.item()
+        
+        reward = 1.0
+        done = False
+        
+        ppo_buffer.add(state, action, reward, done, log_prob_val, value_val)
+    
+    print(f"   ✓ Collected {rollout_length} experiences for PPO")
+    print(f"   ✓ PPO Buffer size: {len(ppo_buffer)}")
     
     # 4. Agent action selection
     print("\n4. Testing action selection...")
@@ -53,12 +76,19 @@ def demo_basic_usage():
     
     # 5. Agent update
     print("\n5. Testing agent update...")
-    batch = buffer.sample(32)
-    
-    dqn_metrics = dqn_agent.update(batch)
-    ppo_metrics = ppo_agent.update(batch)
-    
+    dqn_batch = dqn_buffer.sample(32)
+    dqn_metrics = dqn_agent.update(dqn_batch)
     print(f"   ✓ DQN update metrics: {dqn_metrics}")
+    
+    # PPO update requires rollout data and next_value
+    rollout_data = ppo_buffer.get_batch()
+    # Compute next_value for PPO
+    next_state = torch.randn(4, 84, 84)
+    with torch.no_grad():
+        next_state_tensor = next_state.unsqueeze(0).to(ppo_agent.device)
+        next_value = ppo_agent.get_value(next_state_tensor).flatten()
+    
+    ppo_metrics = ppo_agent.update(rollout_data, next_value, update_epochs=4, minibatch_size=32)
     print(f"   ✓ PPO update metrics: {ppo_metrics}")
     
     # 6. EWC demonstration
@@ -69,15 +99,17 @@ def demo_basic_usage():
     print("   ✓ Training on first task...")
     
     for _ in range(10):
-        batch = buffer.sample(32)
+        batch = dqn_buffer.sample(32)
         ewc_agent.update(batch)
     
     print("   ✓ Consolidating weights after first task...")
-    ewc_agent.consolidate_weights()
+    # Consolidate weights with a sample batch
+    consolidate_batch = dqn_buffer.sample(32)
+    ewc_agent.consolidate_weights(consolidate_batch)
     
     print("   ✓ Training on second task...")
     for _ in range(10):
-        batch = buffer.sample(32)
+        batch = dqn_buffer.sample(32)
         metrics = ewc_agent.update(batch)
     
     print(f"   ✓ EWC metrics: {metrics}")

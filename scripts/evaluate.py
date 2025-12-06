@@ -276,12 +276,36 @@ def evaluate_continual(model_path: str, games: list, algorithm: str, episodes: i
     print(f"Loading continual agent from {model_path}...")
     agent = _build_continual_agent(algorithm, games, use_ewc=use_ewc, ewc_lambda=ewc_lambda)
     agent.load(model_path)
-    if hasattr(agent, "network") and agent.network is not None:
-        agent.network.eval()
-    if hasattr(agent, 'actor'):
-        agent.actor.eval()
-    if hasattr(agent, 'critic'):
-        agent.critic.eval()
+    # Set eval mode - handle EWCWrapper case
+    if isinstance(agent, EWCWrapper):
+        inner_agent = agent.agent
+    else:
+        inner_agent = agent
+    
+    if hasattr(inner_agent, "network") and inner_agent.network is not None:
+        inner_agent.network.eval()
+    if hasattr(inner_agent, 'backbone') and inner_agent.backbone is not None:
+        inner_agent.backbone.eval()
+    if hasattr(inner_agent, 'target_network') and inner_agent.target_network is not None:
+        inner_agent.target_network.eval()
+    if hasattr(inner_agent, 'target_backbone') and inner_agent.target_backbone is not None:
+        inner_agent.target_backbone.eval()
+    if hasattr(inner_agent, 'actor'):
+        inner_agent.actor.eval()
+    if hasattr(inner_agent, 'critic'):
+        inner_agent.critic.eval()
+    if hasattr(inner_agent, 'heads'):
+        for head in inner_agent.heads.values():
+            head.eval()
+    if hasattr(inner_agent, 'target_heads'):
+        for head in inner_agent.target_heads.values():
+            head.eval()
+    if hasattr(inner_agent, 'actors'):
+        for actor in inner_agent.actors.values():
+            actor.eval()
+    if hasattr(inner_agent, 'critics'):
+        for critic in inner_agent.critics.values():
+            critic.eval()
 
     results = {"mode": "continual", "algorithm": algorithm, "games": {}, "episodes": episodes}
 
@@ -341,12 +365,36 @@ def evaluate_multitask(model_path: str, games: list, algorithm: str, episodes: i
     print(f"Loading multi-task agent from {model_path}...")
     agent = _build_continual_agent(algorithm, games, use_ewc=False, ewc_lambda=0.4)
     agent.load(model_path)
-    if hasattr(agent, "network") and agent.network is not None:
-        agent.network.eval()
-    if hasattr(agent, 'actor'):
-        agent.actor.eval()
-    if hasattr(agent, 'critic'):
-        agent.critic.eval()
+    # Set eval mode - handle EWCWrapper case
+    if isinstance(agent, EWCWrapper):
+        inner_agent = agent.agent
+    else:
+        inner_agent = agent
+    
+    if hasattr(inner_agent, "network") and inner_agent.network is not None:
+        inner_agent.network.eval()
+    if hasattr(inner_agent, 'backbone') and inner_agent.backbone is not None:
+        inner_agent.backbone.eval()
+    if hasattr(inner_agent, 'target_network') and inner_agent.target_network is not None:
+        inner_agent.target_network.eval()
+    if hasattr(inner_agent, 'target_backbone') and inner_agent.target_backbone is not None:
+        inner_agent.target_backbone.eval()
+    if hasattr(inner_agent, 'actor'):
+        inner_agent.actor.eval()
+    if hasattr(inner_agent, 'critic'):
+        inner_agent.critic.eval()
+    if hasattr(inner_agent, 'heads'):
+        for head in inner_agent.heads.values():
+            head.eval()
+    if hasattr(inner_agent, 'target_heads'):
+        for head in inner_agent.target_heads.values():
+            head.eval()
+    if hasattr(inner_agent, 'actors'):
+        for actor in inner_agent.actors.values():
+            actor.eval()
+    if hasattr(inner_agent, 'critics'):
+        for critic in inner_agent.critics.values():
+            critic.eval()
 
     results = {"mode": "multitask", "algorithm": algorithm, "games": {}, "episodes": episodes}
 
